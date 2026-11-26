@@ -87,7 +87,7 @@ schema；外部 MCP server 的工具也走这张表。
 | `auto`（默认） | 任意 | 各协议默认端点 | 依次试 openai → openspeech → dashscope → ark，哪种返回真实音频/图片就用哪种 |
 | `openai` | `https://api.openai.com/v1` | `/audio/speech`、`/images/generations` | 各家聚合站、自建 vLLM/Ollama 也走这个 |
 | `dashscope` | `https://dashscope.aliyuncs.com` 或 `https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com` | `/api/v1/services/aigc/multimodal-generation/generation`（TTS 也可用 `/api/v1/services/audio/tts/SpeechSynthesizer`） | 阿里百炼，返回里是音频/图片 URL，插件自动下载；TTS 可另填 `language`（`Chinese`/`English`） |
-| `tokenplan` | `https://token-plan.cn-beijing.maas.aliyuncs.com`（**不要**带 `/apps/anthropic`） | TTS `/api/v1/services/audio/tts/SpeechSynthesizer`、生图 `/api/v1/services/aigc/multimodal-generation/generation` | 阿里云 Token Plan 订阅套餐（`sk-sp-` Key）。音色必须用套餐音色名（如 `longanhuan_v3.6`）；生图尺寸写 `1024*1024`；`Cherry` 这类百炼音色会报 `[cosyvoice:]Engine error [411]` |
+| `tokenplan` | `https://token-plan.cn-beijing.maas.aliyuncs.com`（带 `/compatible-mode/v1` 也可以，会自动折算到根地址；**不要**带 `/apps/anthropic`） | TTS `/api/v1/services/audio/tts/SpeechSynthesizer`、生图 `/api/v1/services/aigc/multimodal-generation/generation` | 阿里云 Token Plan 订阅套餐（`sk-sp-` Key）。音色必须用套餐音色名（如 `longanhuan_v3.6`）；生图尺寸写 `1024*1024`；`Cherry` 这类百炼音色会报 `[cosyvoice:]Engine error [411]` |
 | `ark` | `https://ark.cn-beijing.volces.com/api/plan/v3` | `/images/generations` | 火山方舟生图，`data[0].url` 约 24 小时有效；**必须用 Agent Plan 专属 Key**，baseURL 含 `/plan` |
 | `openspeech` | `https://openspeech.bytedance.com` | `/api/v3/tts/unidirectional` | 火山语音 TTS，鉴权头 `x-api-key`，`req_params{text,speaker,audio_params}`，返回 base64 音频 |
 

@@ -274,6 +274,7 @@ function findUrl(node: unknown, ext?: RegExp): string | undefined {
 const AUDIO_DEFAULT_PATH: Record<string, string> = {
   openai: '/audio/speech',
   dashscope: '/api/v1/services/aigc/multimodal-generation/generation',
+  tokenplan: '/api/v1/services/audio/tts/SpeechSynthesizer',
   ark: '/api/v3/tts/unidirectional',
   openspeech: '/api/v3/tts/unidirectional',
 };
@@ -282,11 +283,22 @@ const IMAGE_DEFAULT_PATH: Record<string, string> = {
   openai: '/images/generations',
   ark: '/images/generations',
   dashscope: '/api/v1/services/aigc/multimodal-generation/generation',
+  tokenplan: '/api/v1/services/aigc/multimodal-generation/generation',
 };
 
+/**
+ * Token Plan's native services live at the host root; a compatible-mode suffix
+ * only serves chat, so it has to be dropped before a native path is appended.
+ */
+function nativeBase(baseURL: string): string {
+  return String(baseURL ?? '').replace(/\/compatible-mode(\/v\d+)?\/?$/i, '');
+}
+
 function protocolOf(config: ProviderConfig): string {
-  const raw = String(config.protocol ?? 'openai').toLowerCase();
-  return raw === 'auto' ? 'openai' : raw;
+  const raw = String(config.protocol ?? '').toLowerCase();
+  if (raw && raw !== 'auto') return raw;
+  if (/token-plan\./i.test(String(config.baseURL ?? ''))) return 'tokenplan';
+  return 'openai';
 }
 
 async function toDataUrl(bytes: ArrayBuffer, mime: string): Promise<string> {
@@ -368,25 +380,39 @@ export async function speak(
           input: { text, ...(voice ? { voice } : {}), ...(format && format !== 'mp3' ? { format } : {}) },
           ...extra,
         }
-      : protocol === 'ark' || protocol === 'openspeech'
+      : protocol === 'tokenplan'
         ? {
-            ...(model ? { model } : {}),
-            req_params: { text, ...(voice ? { speaker: voice } : {}), audio_params: { format } },
+            model,
+            input: {
+              text,
+              ...(voice ? { voice } : {}),
+              format: format || 'mp3',
+              sample_rate: 22050,
+            },
             ...extra,
           }
-        : {
-            input: text,
-            ...(model ? { model } : {}),
-            ...(voice ? { voice } : {}),
-            response_format: format,
-            ...extra,
-          };
+        : protocol === 'ark' || protocol === 'openspeech'
+          ? {
+              ...(model ? { model } : {}),
+              req_params: { text, ...(voice ? { speaker: voice } : {}), audio_params: { format } },
+              ...extra,
+            }
+          : {
+              input: text,
+              ...(model ? { model } : {}),
+              ...(voice ? { voice } : {}),
+              response_format: format,
+              ...extra,
+            };
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (tts.apiKey) {
     if (protocol === 'ark' || protocol === 'openspeech') headers['x-api-key'] = tts.apiKey;
     else headers.authorization = 'Bearer ' + tts.apiKey;
   }
-  const endpoint = joinUrl(tts.baseURL, tts.path || AUDIO_DEFAULT_PATH[protocol] || '/audio/speech');
+  const endpoint = joinUrl(
+    protocol === 'tokenplan' ? nativeBase(tts.baseURL) : tts.baseURL,
+    tts.path || AUDIO_DEFAULT_PATH[protocol] || '/audio/speech',
+  );
   const response = await fetch(endpoint, {
     method: 'POST',
     headers,
@@ -434,11 +460,12 @@ export async function generateImage(
   const size = options.size || image.size || '1024x1024';
   const extra = image.extraBody ?? {};
   const body =
-    protocol === 'dashscope'
+    protocol === 'dashscope' || protocol === 'tokenplan'
       ? {
           model,
           input: { messages: [{ role: 'user', content: [{ text: prompt }] }] },
-          parameters: { size, ...extra },
+          // Token Plan wants 1024*1024, not 1024x1024.
+          parameters: { size: protocol === 'tokenplan' ? size.replace(/[x×*]/i, '*') : size, ...extra },
         }
       : protocol === 'ark'
         ? { ...(model ? { model } : {}), prompt, size, response_format: 'url', ...extra }
@@ -451,14 +478,20 @@ export async function generateImage(
             // and url answers are handled below.
             ...extra,
           };
-  const response = await fetch(joinUrl(image.baseURL, image.path || IMAGE_DEFAULT_PATH[protocol] || '/images/generations'), {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      ...(image.apiKey ? { authorization: 'Bearer ' + image.apiKey } : {}),
+  const response = await fetch(
+    joinUrl(
+      protocol === 'tokenplan' ? nativeBase(image.baseURL) : image.baseURL,
+      image.path || IMAGE_DEFAULT_PATH[protocol] || '/images/generations',
+    ),
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(image.apiKey ? { authorization: 'Bearer ' + image.apiKey } : {}),
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
+  );
   if (!response.ok) {
     throw new Error('生图 HTTP ' + response.status + '：' + (await response.text()).slice(0, 300));
   }

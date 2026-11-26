@@ -70,17 +70,107 @@ export function defaultPath(kind, protocol) {
   return table[key] ?? table.openai;
 }
 
-/** Endpoint for one attempt, honouring a manually configured path. */
+/**
+ * Endpoint for one attempt.
+ *
+ * Resolution order, first hit wins:
+ *  1. an explicit `path` typed by the user;
+ *  2. an address typed down to a full endpoint (`…/v1/audio/speech`);
+ *  3. a Token Plan host, whose native services live at the host root and whose
+ *     `/compatible-mode/v1` prefix only ever serves OpenAI-compatible paths —
+ *     so the prefix is dropped before the native path is appended;
+ *  4. `baseURL` + the protocol's default path.
+ */
 function endpointFor(kind, provider, protocol) {
   const manual = String(provider.path ?? '').trim();
   if (manual) return joinUrl(provider.baseURL, manual);
-  return joinUrl(provider.baseURL, defaultPath(kind, protocol));
+  const typed = String(provider.baseURL ?? '').trim();
+  if (pathLikeBase(kind, typed)) return joinUrlLoose(typed);
+  const fallback = defaultPath(kind, protocol);
+  if (/\/compatible-mode/i.test(typed)) {
+    const root = typed.replace(/\/compatible-mode(\/v\d+)?\/?$/i, '');
+    // Token Plan's compatible prefix serves no native service; always climb to the root.
+    if (protocol === 'tokenplan') return joinUrlLoose(root, fallback);
+    // Any other OpenAI-compatible service keeps its prefix: `/compatible-mode/v1` + `/audio/speech`.
+    return joinUrlLoose(typed, fallback);
+  }
+  return joinUrl(typed, fallback);
+}
+
+/** True when the address points at Token Plan's Anthropic-only endpoint. */
+function isAnthropicBase(baseURL) {
+  return /\/apps\/anthropic(\/|$)/i.test(String(baseURL ?? ''));
+}
+
+/** An actionable message for the one address that cannot serve TTS or images at all. */
+function anthropicRefusal(kind) {
+  return (
+    `${kind === 'tts' ? '语音合成' : '生图'} 不能走 Token Plan 的 /apps/anthropic 端点（那是 Anthropic 对话协议专用）。` +
+    '请把服务地址改成 https://token-plan.cn-beijing.maas.aliyuncs.com ' +
+    '（带 /compatible-mode/v1 也可以，插件会自动折算），然后重新测试。'
+  );
+}
+
+/**
+ * True when the address box holds a full endpoint rather than a service root.
+ * Deliberately narrow: only the well-known Tab-completion-style paths qualify, so a
+ * custom base like `https://x/v1` keeps its suffix and only gains `/audio/speech`.
+ */
+function pathLikeBase(kind, baseURL) {
+  if (!/^https?:\/\//i.test(baseURL)) return false;
+  let pathname;
+  try {
+    pathname = new URL(baseURL).pathname.replace(/\/+$/, '');
+  } catch {
+    return false;
+  }
+  if (!pathname) return false;
+  if (/\/(audio\/speech|images\/generations|chat\/completions|SpeechSynthesizer|generation)$/i.test(pathname)) return true;
+  return false;
+}
+
+/**
+ * Which wire shape an address implies. Token Plan serves the same models through a
+ * native service root and an OpenAI-compatible `/compatible-mode/v1` prefix, so the
+ * address alone decides the body shape — the user never has to know which is which.
+ *
+ * Note: `/compatible-mode/v1` is OpenAI-shaped only for chat; the native TTS and image
+ * services are NOT reachable beneath that prefix. Those kinds always use the native
+ * body (with the prefix stripped from the endpoint), so their flavor is 'native'.
+ */
+function flavorOf(kind, baseURL) {
+  const text = String(baseURL ?? '');
+  if (/\/compatible-mode/i.test(text)) {
+    // The OpenAI shape this plugin can speak is `audio/speech` + `images/generations`;
+    // Token Plan does not expose either under the compatible prefix, so keep native.
+    return 'native';
+  }
+  if (/\/apps\/anthropic/i.test(text)) return 'anthropic';
+  return 'native';
+}
+
+/** Fill in the protocol a bare host address implies, so `auto` starts from the right guess. */
+function inferProtocol(kind, provider, requested) {
+  if (requested && requested !== 'auto') return requested;
+  const base = String(provider?.baseURL ?? '');
+  // Token Plan: neither `/compatible-mode/v1` nor `/apps/anthropic` serves TTS or image
+  // generation, so point every guess at the native service root.
+  if (/token-plan\./i.test(base)) return 'tokenplan';
+  if (/\/(apps\/anthropic|compatible-mode)\//i.test(base)) return 'openai';
+  return 'auto';
 }
 
 function joinUrl(baseURL, suffix) {
   const base = String(baseURL ?? '').replace(/\/+$/, '');
   const tail = String(suffix ?? '').replace(/^\/+/, '');
   if (!base) throw new Error('服务地址 baseURL 未配置');
+  return tail ? `${base}/${tail}` : base;
+}
+
+/** Same as joinUrl but without the "missing baseURL" guard (used for well-known paths). */
+function joinUrlLoose(baseURL, suffix) {
+  const base = String(baseURL ?? '').replace(/\/+$/, '');
+  const tail = String(suffix ?? '').replace(/^\/+/, '');
   return tail ? `${base}/${tail}` : base;
 }
 
@@ -269,7 +359,21 @@ function ttsRequest(protocol, { provider, text, model, voice, format, extraBody 
       };
     }
     case 'tokenplan': {
-      // Token Plan 语音合成: input{ text, voice, format, sample_rate } → output.audio.url
+      // Two wire shapes for the same plan:
+      //  - native `/api/v1/services/audio/tts/SpeechSynthesizer`: input{text,voice,format,sample_rate} → output.audio.url
+      //  - OpenAI-compatible `/compatible-mode/v1/audio/speech`: {input,model,voice,response_format} → audio bytes
+      if (provider.flavor === 'compatible') {
+        return {
+          body: {
+            input: text,
+            ...(modelId ? { model: modelId } : {}),
+            ...(voiceId ? { voice: voiceId } : {}),
+            ...(audioFormat ? { response_format: audioFormat } : {}),
+            ...extraBody,
+          },
+          auth: 'bearer',
+        };
+      }
       return {
         body: {
           model: modelId,
@@ -370,8 +474,10 @@ export async function synthesizeSpeech({ provider, apiKey, text, outFile, voice,
   if (!String(text ?? '').trim()) throw new Error('TTS 文本为空');
   if (!outFile) throw new Error('TTS 缺少输出文件路径');
   if (!String(provider?.baseURL ?? '').trim()) throw new Error('服务地址 baseURL 未配置');
+  if (isAnthropicBase(provider.baseURL)) throw new Error(anthropicRefusal('tts'));
 
-  const requested = normalizeProtocol(provider.protocol);
+  provider = { ...provider, flavor: flavorOf('tts', provider.baseURL) };
+  const requested = inferProtocol('tts', provider, normalizeProtocol(provider.protocol));
   const attempts = requested === 'auto' ? TTS_ORDER : [requested];
   const extraBody = parseExtraBody(provider.extraBody, 'TTS');
   const errors = [];
@@ -420,6 +526,19 @@ function imageRequest(protocol, { provider, prompt, size, model, extraBody }) {
     case 'tokenplan':
       // Qwen-Image: input.messages[] with a text content part (Token Plan 同形状)。
       // Token Plan 的尺寸写法是 1024*1024，这里顺手把 1024x1024 归一化。
+      // The OpenAI-compatible flavour of Token Plan uses the plain images/generations body instead.
+      if (protocol === 'tokenplan' && provider.flavor === 'compatible') {
+        return {
+          body: {
+            prompt,
+            n: 1,
+            ...(modelId ? { model: modelId } : {}),
+            ...(imageSize ? { size: imageSize } : {}),
+            ...extraBody,
+          },
+          auth: 'bearer',
+        };
+      }
       return {
         body: {
           model: modelId,
@@ -481,8 +600,10 @@ export async function generateImage({ provider, apiKey, prompt, outFile, size, m
   if (!String(prompt ?? '').trim()) throw new Error('生图 prompt 为空');
   if (!outFile) throw new Error('生图缺少输出文件路径');
   if (!String(provider?.baseURL ?? '').trim()) throw new Error('服务地址 baseURL 未配置');
+  if (isAnthropicBase(provider.baseURL)) throw new Error(anthropicRefusal('image'));
 
-  const requested = normalizeProtocol(provider.protocol);
+  provider = { ...provider, flavor: flavorOf('image', provider.baseURL) };
+  const requested = inferProtocol('image', provider, normalizeProtocol(provider.protocol));
   const attempts = requested === 'auto' ? IMAGE_ORDER : [requested];
   const extraBody = parseExtraBody(provider.extraBody, '生图');
   const errors = [];
