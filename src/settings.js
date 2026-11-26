@@ -57,6 +57,11 @@ export const DEFAULTS = {
       language: '',
       /** 火山语音 `req_params.audio_params.sample_rate`. */
       sampleRate: 0,
+      /**
+       * 火山语音 `x-api-resource-id`. Agent Plan only accepts `seed-tts-2.0`;
+       * sending the model id answers 403 `requested resource not granted`.
+       */
+      resourceId: 'seed-tts-2.0',
       /** Extra JSON merged into the request body (provider-specific knobs). */
       extraBody: '',
     },

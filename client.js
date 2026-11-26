@@ -36,7 +36,7 @@ window.__ModuleLoader__.load({
         groupImage: '生图服务',
         groupStatus: '环境与项目',
         projectsDir: '项目目录',
-        projectsDirHint: '新项目与已有 Remotion 工程所在目录，支持 ~ 开头',
+        projectsDirHint: '项目存放目录，支持 ~ 开头',
         outDir: '输出目录',
         outDirHint: '相对路径相对项目目录，例如 out',
         codec: '默认编码',
@@ -53,7 +53,7 @@ window.__ModuleLoader__.load({
         chromePathLabel: 'Chrome 可执行文件路径',
         baseURL: '服务地址（baseURL）',
         path: '接口路径',
-        pathHint: '留空则用所选协议的默认端点；只有服务商给了特殊路径时才填',
+        pathHint: '留空用协议默认端点',
         protocol: '接口协议',
         proto_auto: '自动识别（推荐）',
         proto_openai: 'OpenAI 兼容',
@@ -62,21 +62,29 @@ window.__ModuleLoader__.load({
         proto_ark: '火山方舟 Ark',
         proto_arkplan: '火山方舟 Agent Plan（订阅套餐）',
         proto_openspeech: '火山语音 openspeech',
-        protoHint_auto: '依次尝试下面的几种协议，哪种返回真实音频/图片就用哪种；最省事。',
-        protoHint_openai: 'POST 到 baseURL+path，请求体 {input|prompt, model, voice|size}，返回音频字节或 data[0].b64_json/url。适用于 OpenAI 官方、各类聚合站、本地 vLLM/Ollama。',
-        protoHint_dashscope: '阿里云百炼：接口路径默认 /api/v1/services/aigc/multimodal-generation/generation（TTS 也可用 /api/v1/services/audio/tts/SpeechSynthesizer），返回里是音频/图片 URL，插件会自动下载。',
-        protoHint_tokenplan: '阿里云 Token Plan 订阅套餐：baseURL 填 https://token-plan.cn-beijing.maas.aliyuncs.com；带 /compatible-mode/v1 也能用（插件会自动折算到根地址）。不要填 /apps/anthropic，那是对话协议专用端点，不支持配音和生图。TTS 走 /api/v1/services/audio/tts/SpeechSynthesizer、生图走 /api/v1/services/aigc/multimodal-generation/generation；音色要用套餐音色名（如 longanhuan_v3.6）。',
-        protoHint_ark: '火山方舟：生图走 /images/generations 返回 data[0].url（有效期约 24 小时）；必须用 Agent Plan 专属 Key，baseURL 通常含 /api/plan/v3。',
-        protoHint_arkplan: '火山方舟 Agent Plan 订阅套餐：Key 以 ark- 开头。baseURL 填 https://ark.cn-beijing.volces.com/api/plan/v3（也可以只填 https://ark.cn-beijing.volces.com，插件会补全）；路径必须含 /plan，用 /api/v3 会静默走按量付费。生图 /api/plan/v3/images/generations（模型 doubao-seedream-5.0-pro / -flash）；配音固定走 openspeech 的 /api/v3/plan/tts/unidirectional，需额外带 x-api-resource-id: seed-tts-2.0，模型 doubao-seed-tts-2.0，音色如 zh_female_gaolengyujie_uranus_bigtts。若报 AgentPlanDeductNotEnabled，请先在方舟控制台 Agent Plan 页面打开抵扣开关。',
-        protoHint_openspeech: '火山语音：POST /api/v3/tts/unidirectional，鉴权头 x-api-key，请求体 {req_params:{text,speaker,audio_params}}，返回 base64 音频分块。',
+        protoHint_auto: '不确定就选这个，插件挨个试。',
+        protoHint_openai: '按量付费的 OpenAI 兼容 API（sk- 开头）。',
+        protoHint_dashscope: '按量付费的阿里云 key（sk- 开头，dashscope 域名）。',
+        protoHint_tokenplan: '阿里云订阅套餐 key（sk-sp- 开头，token-plan 域名）。',
+        protoHint_ark: '按量付费的火山方舟 key（/api/v3 路径）。',
+        protoHint_arkplan: '火山方舟订阅套餐 key（ark- 开头，/api/plan 路径）。',
+        protoHint_openspeech: '火山语音服务（openspeech 域名，仅配音）。',
         model: '模型',
+        modelHint: '服务商控制台里的模型 ID，照抄即可',
         voice: '音色',
+        voiceHint: '服务商提供的音色 ID',
         format: '输出格式',
         language: '语言（可选）',
-        languageHint: '仅 Qwen-TTS 用：Chinese / English 等；其他协议留空即可',
+        languageHint: '仅 Qwen-TTS 用，其他留空',
         size: '图片尺寸',
+        sizeHint: '火山方舟需 ≥ 1024x1024（建议 2048x2048）',
+        resourceId: '资源 ID（可选）',
+        resourceIdHint: 'Agent Plan 固定 seed-tts-2.0',
+        suggestFill: '填入',
+        suggestAll: '一并填入推荐值',
+        suggestedHint: '来自上面选中的协议，可改。',
         extraBody: '附加请求体（JSON）',
-        extraBodyHint: '会合并进请求 body，用于服务商特有参数',
+        extraBodyHint: '合并进请求 body',
         apiKey: 'API Key',
         keySet: '已配置',
         keyUnset: '未配置',
@@ -87,21 +95,21 @@ window.__ModuleLoader__.load({
         doctor: '检查环境',
         checking: '检查中…',
         projects: '已有项目',
-        noProjects: '还没有项目。让助手创建，或在聊天里说「新建一个 Remotion 项目」。',
+        noProjects: '还没有项目，让助手新建。',
         installed: '依赖已安装',
         notInstalled: '依赖未安装',
         settingsFile: '配置文件',
         runtime: '运行环境',
-        emptyBase: '未配置服务商时，渲染与项目功能仍可用，只是不能自动配音/配图。',
+        emptyBase: '不配服务商也能渲染，只是不能自动配音/配图。',
         keySaved: '密钥已保存',
         keyCleared: '密钥已清除',
         resetDone: '已恢复默认设置',
         openDir: '打开项目目录',
         creator: '创作面板',
         groupStudio: '创作面板（预览与时间轴）',
-        groupStudioHint: 'Studio 会启动该项目自带的官方 remotion studio 开发服务器，就绪后自动用浏览器打开；画面、时间轴轨道、属性面板全部是 Remotion 原版界面。',
+        groupStudioHint: '启动官方 studio，就绪后自动打开浏览器。',
         autoOpen: '自动打开浏览器',
-        autoOpenHint: 'Studio 就绪后自动用系统默认浏览器打开；关闭后只能手动点「启动 Studio」或复制地址。',
+        autoOpenHint: '就绪后自动打开系统浏览器。',
         studioProject: '项目',
         studioOpened: 'Studio 已打开：',
         studioStarting: '正在启动 Studio…',
@@ -112,9 +120,9 @@ window.__ModuleLoader__.load({
         studioReload: '刷新画面',
         studioOpenTab: '新标签打开',
         studioStop: '停止',
-        studioEmpty: '选一个项目后，这里会载入官方 Remotion Studio：画面预览、时间轴轨道、属性面板、逐帧调试都在其中，功能和本地跑 remotion studio 完全一致。',
-        studioNoProject: '还没有 Remotion 项目。对助手说「新建一个 Remotion 项目」，创建好再回到这里。',
-        studioSettingsHint: '配音 / 生图服务商在 设置 → Remotion 影棚 里配置。',
+        studioEmpty: '选一个项目，这里会载入官方 Remotion Studio。',
+        studioNoProject: '还没有项目，让助手新建。',
+        studioSettingsHint: '配音 / 生图在 设置 → Remotion 影棚 配置。',
       },
       en: {
         nav: 'Remotion Studio',
@@ -132,7 +140,7 @@ window.__ModuleLoader__.load({
         groupImage: 'Image generation',
         groupStatus: 'Environment & projects',
         projectsDir: 'Projects directory',
-        projectsDirHint: 'Where new and existing Remotion projects live; ~ is expanded',
+        projectsDirHint: 'Where projects live; ~ is expanded',
         outDir: 'Output folder',
         outDirHint: 'Relative to the project, e.g. out',
         codec: 'Default codec',
@@ -149,7 +157,7 @@ window.__ModuleLoader__.load({
         chromePathLabel: 'Chrome executable path',
         baseURL: 'Base URL',
         path: 'Endpoint path',
-        pathHint: 'Leave blank to use the selected protocol default; fill it only when the provider documents a special path',
+        pathHint: 'Blank = protocol default',
         protocol: 'Wire protocol',
         proto_auto: 'Auto-detect (recommended)',
         proto_openai: 'OpenAI-compatible',
@@ -158,21 +166,29 @@ window.__ModuleLoader__.load({
         proto_ark: 'Volcengine Ark',
         proto_arkplan: 'Volcengine Ark Agent Plan (subscription)',
         proto_openspeech: 'Volcengine openspeech',
-        protoHint_auto: 'Tries the protocols below until one returns real audio or image data — the least fiddly choice.',
-        protoHint_openai: 'POST baseURL+path with {input|prompt, model, voice|size}; expects audio bytes or data[0].b64_json/url. Works with OpenAI, aggregators and local vLLM/Ollama.',
-        protoHint_dashscope: 'Alibaba Cloud Bailian: default path /api/v1/services/aigc/multimodal-generation/generation (TTS may also use /api/v1/services/audio/tts/SpeechSynthesizer). Answers with a URL, which the plugin downloads for you.',
-        protoHint_tokenplan: 'Alibaba Token Plan subscription: base URL https://token-plan.cn-beijing.maas.aliyuncs.com. A /compatible-mode/v1 suffix also works (it is folded back to the host root). Do not use /apps/anthropic — that endpoint is chat-only and serves no TTS or images. TTS uses /api/v1/services/audio/tts/SpeechSynthesizer, images use /api/v1/services/aigc/multimodal-generation/generation. Voices must be plan voices such as longanhuan_v3.6.',
-        protoHint_ark: 'Volcengine Ark: images via /images/generations returning data[0].url (valid ~24h). Requires an Agent Plan key; the base URL usually contains /api/plan/v3.',
-        protoHint_arkplan: 'Volcengine Ark Agent Plan subscription: keys start with ark-. Base URL https://ark.cn-beijing.volces.com/api/plan/v3 (or just https://ark.cn-beijing.volces.com and the plugin fills the rest). The path must contain /plan — /api/v3 silently bills pay-as-you-go. Images: /api/plan/v3/images/generations with doubao-seedream-5.0-pro or -flash. Speech is pinned to openspeech /api/v3/plan/tts/unidirectional and needs the extra header x-api-resource-id: seed-tts-2.0, model doubao-seed-tts-2.0, voices such as zh_female_gaolengyujie_uranus_bigtts. If you see AgentPlanDeductNotEnabled, turn on the deduction switch on the Agent Plan page in the Ark console first.',
-        protoHint_openspeech: 'Volcengine speech: POST /api/v3/tts/unidirectional with x-api-key and {req_params:{text,speaker,audio_params}}; answers with base64 audio chunks.',
+        protoHint_auto: 'Not sure? Pick this — the plugin tries each in turn.',
+        protoHint_openai: 'Pay-as-you-go OpenAI-compatible API (sk- keys).',
+        protoHint_dashscope: 'Pay-as-you-go Alibaba Cloud key (sk-, dashscope domain).',
+        protoHint_tokenplan: 'Alibaba subscription key (sk-sp-, token-plan domain).',
+        protoHint_ark: 'Pay-as-you-go Volcengine Ark key (/api/v3 paths).',
+        protoHint_arkplan: 'Volcengine Ark subscription key (ark-, /api/plan paths).',
+        protoHint_openspeech: 'Volcengine speech service (openspeech domain, speech only).',
         model: 'Model',
+        modelHint: 'The model ID from the provider console',
         voice: 'Voice',
+        voiceHint: 'A voice ID the provider offers',
         format: 'Format',
         language: 'Language (optional)',
-        languageHint: 'Qwen-TTS only: Chinese / English etc. Leave blank for other protocols',
+        languageHint: 'Qwen-TTS only; leave blank otherwise',
         size: 'Image size',
+        sizeHint: 'Volcengine Ark needs at least 1024x1024 (2048x2048 recommended)',
+        resourceId: 'Resource ID (optional)',
+        resourceIdHint: 'Agent Plan: always seed-tts-2.0',
+        suggestFill: 'Fill',
+        suggestAll: 'Fill all suggested values',
+        suggestedHint: 'From the selected protocol; editable.',
         extraBody: 'Extra request body (JSON)',
-        extraBodyHint: 'Merged into the request body for provider-specific options',
+        extraBodyHint: 'Merged into the request body',
         apiKey: 'API key',
         keySet: 'Configured',
         keyUnset: 'Not configured',
@@ -183,21 +199,21 @@ window.__ModuleLoader__.load({
         doctor: 'Check environment',
         checking: 'Checking…',
         projects: 'Projects',
-        noProjects: 'No projects yet. Ask the assistant to scaffold one.',
+        noProjects: 'No projects yet — ask the assistant to scaffold one.',
         installed: 'dependencies installed',
         notInstalled: 'dependencies missing',
         settingsFile: 'Settings file',
         runtime: 'Runtime',
-        emptyBase: 'Without a provider the renderer and projects still work — only voice-over and images are unavailable.',
+        emptyBase: 'Rendering works without a provider — only voice-over and images need one.',
         keySaved: 'API key saved',
         keyCleared: 'API key cleared',
         resetDone: 'Defaults restored',
         openDir: 'Open projects folder',
         creator: 'Creator',
         groupStudio: 'Creator panel (preview & timeline)',
-        groupStudioHint: 'Starts the official remotion studio dev server of the selected project and opens it in your browser once it is ready; preview, timeline tracks and props panel are all stock Remotion.',
+        groupStudioHint: 'Starts the official studio and opens your browser.',
         autoOpen: 'Open browser automatically',
-        autoOpenHint: 'Open the default browser as soon as the Studio is reachable. Turn off to start it only on demand.',
+        autoOpenHint: 'Open your browser once the Studio is ready.',
         studioProject: 'Project',
         studioOpened: 'Studio opened:',
         studioStarting: 'Starting Studio…',
@@ -208,9 +224,9 @@ window.__ModuleLoader__.load({
         studioReload: 'Reload view',
         studioOpenTab: 'Open in new tab',
         studioStop: 'Stop',
-        studioEmpty: 'Pick a project and the official Remotion Studio loads here: preview, timeline tracks, props panel and frame stepping, identical to running remotion studio locally.',
-        studioNoProject: 'No Remotion project yet. Ask the assistant to scaffold one, then come back.',
-        studioSettingsHint: 'Voice-over and image providers are configured under Settings → Remotion Studio.',
+        studioEmpty: 'Pick a project to load the official Remotion Studio.',
+        studioNoProject: 'No project yet — ask the assistant to scaffold one.',
+        studioSettingsHint: 'Providers live in Settings → Remotion Studio.',
       },
     };
 
@@ -227,6 +243,9 @@ window.__ModuleLoader__.load({
 .dshrs-input,.dshrs-select,.dshrs-area{width:100%;box-sizing:border-box;height:32px;padding:0 10px;border-radius:8px;border:1px solid var(--dsw-alias-border-l2,#ffffff1f);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#0f1115);font-size:13px;font-family:inherit;outline:none}
 .dshrs-input::placeholder{color:var(--dsw-alias-state-idle-primary,#9ca3af)}
 .dshrs-select option{background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115)}
+.dshrs-chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.dshrs-chip{height:24px;padding:0 10px;border-radius:12px;border:1px solid var(--dsw-alias-border-l2,#ffffff1f);background:transparent;color:var(--dsw-alias-label-secondary,#6b7280);font-size:11px;line-height:1;cursor:pointer;font-family:inherit;white-space:nowrap}
+.dshrs-chip:hover{background:var(--dsw-alias-bg-layer-2,#0000000f);color:var(--dsw-alias-label-primary,#0f1115)}
 .dshrs-area{height:68px;padding:8px 10px;resize:vertical;line-height:1.5}
 .dshrs-box{width:16px;height:16px;margin-top:8px;accent-color:var(--dsw-alias-brand-primary,#0f1115);cursor:pointer}
 .dshrs-input:focus,.dshrs-select:focus,.dshrs-area:focus{border-color:var(--dsw-alias-border-l1,#9ca3af)}
@@ -324,6 +343,12 @@ window.__ModuleLoader__.load({
 
     const input = (value, onChange, extra) =>
       h('input', { className: 'dshrs-input', value: value ?? '', onChange, ...(extra ?? {}) });
+
+    /** `input()` already spreads `value`; drop the duplicate so React keeps it controlled. */
+    const fieldInput = (value, onChange, extra) => {
+      const { value: _ignored, ...rest } = extra ?? {};
+      return h('input', { className: 'dshrs-input', value: value ?? '', onChange, ...rest });
+    };
 
     function SettingsPage() {
       const [snapshot, setSnapshot] = React.useState(null);
@@ -470,11 +495,88 @@ window.__ModuleLoader__.load({
 
       const PROTOCOLS = ['auto', 'openai', 'dashscope', 'tokenplan', 'ark', 'arkplan', 'openspeech'];
 
+      /**
+       * One-click fill values per protocol and provider, mirroring the defaults in
+       * `src/providers.js` (DEFAULT_TTS_PATH / DEFAULT_IMAGE_PATH) plus the provider
+       * catalogues that were probed live: Volcengine Ark / Agent Plan, Alibaba
+       * DashScope / Token Plan, and a plain OpenAI-compatible endpoint.
+       */
+      const SUGGEST = {
+        tts: {
+          openai: { baseURL: 'https://api.openai.com/v1', model: 'gpt-4o-mini-tts', voice: 'alloy', format: 'mp3' },
+          dashscope: { baseURL: 'https://dashscope.aliyuncs.com', model: 'qwen-audio-3.0-tts-plus', voice: 'Cherry', format: 'mp3', language: 'Chinese' },
+          tokenplan: { baseURL: 'https://dashscope.aliyuncs.com', model: 'qwen-audio-3.0-tts-plus', voice: 'Cherry', format: 'mp3' },
+          ark: { baseURL: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-seed-tts-2.0', voice: 'zh_female_gaolengyujie_uranus_bigtts', format: 'mp3' },
+          arkplan: { baseURL: 'https://ark.cn-beijing.volces.com/api/plan/v3', model: 'doubao-seed-tts-2.0', voice: 'zh_female_gaolengyujie_uranus_bigtts', format: 'mp3', resourceId: 'seed-tts-2.0' },
+          openspeech: { baseURL: 'https://openspeech.bytedance.com', model: 'doubao-seed-tts-2.0', voice: 'zh_female_gaolengyujie_uranus_bigtts', format: 'mp3' },
+        },
+        image: {
+          openai: { baseURL: 'https://api.openai.com/v1', model: 'gpt-image-1', size: '1024x1024' },
+          dashscope: { baseURL: 'https://dashscope.aliyuncs.com', model: 'qwen-image-3.0-pro', size: '1024x1024' },
+          tokenplan: { baseURL: 'https://dashscope.aliyuncs.com', model: 'qwen-image-3.0-pro', size: '1024x1024' },
+          ark: { baseURL: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-seedream-5.0-pro', size: '2048x2048' },
+          arkplan: { baseURL: 'https://ark.cn-beijing.volces.com/api/plan/v3', model: 'doubao-seedream-5.0-pro', size: '2048x2048' },
+          openspeech: { baseURL: 'https://openspeech.bytedance.com', model: '', size: '1024x1024' },
+        },
+      };
+
+      /** Faster presets that only exist for one protocol and one provider. */
+      const MODEL_PRESETS = {
+        tts: {
+          openai: ['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd'],
+          dashscope: ['qwen-audio-3.0-tts-plus', 'qwen-tts'],
+          tokenplan: ['qwen-audio-3.0-tts-plus'],
+          ark: ['doubao-seed-tts-2.0'],
+          arkplan: ['doubao-seed-tts-2.0'],
+          openspeech: ['doubao-seed-tts-2.0'],
+        },
+        image: {
+          openai: ['gpt-image-1', 'dall-e-3'],
+          dashscope: ['qwen-image-3.0-pro', 'wan2.7-image-pro', 'wan2.7-image'],
+          tokenplan: ['qwen-image-3.0-pro', 'wan2.7-image-pro'],
+          ark: ['doubao-seedream-5.0-pro', 'doubao-seedream-5.0-flash'],
+          arkplan: ['doubao-seedream-5.0-pro', 'doubao-seedream-5.0-flash'],
+          openspeech: [],
+        },
+      };
+
+      /** Placeholders that tell the user what belongs in an empty box. */
+      const placeholders = (provider, protocol, key) => {
+        const suggest = SUGGEST[provider]?.[protocol]?.[key];
+        if (suggest) return suggest;
+        const byProtocol = {
+          baseURL: 'https://api.example.com/v1',
+          path: protocol === 'auto' ? '留空即可' : '留空 = 用协议默认端点',
+          model: '服务商文档里的模型名',
+          voice: '服务商文档里的音色名',
+          format: 'mp3',
+          language: '',
+          size: '1024x1024',
+          extraBody: '{ "seed": 42 }',
+        };
+        return byProtocol[key] ?? '';
+      };
+
       const providerCard = (provider, fields, titleKey) => {
         const config = draft.providers[provider] ?? {};
         const status = snapshot.settings?.providers?.[provider]?.apiKeyConfigured;
         const test = tests[provider];
         const protocolHint = config.protocol && config.protocol !== 'auto' ? t(`protoHint_${config.protocol}`) : t('protoHint_auto');
+        const effective = PROTOCOLS.includes(config.protocol) ? config.protocol : 'auto';
+        const suggestion = SUGGEST[provider]?.[effective];
+        /** Fill every suggested value that is still empty — never overwrites typed input. */
+        const fillSuggested = () => {
+          if (!suggestion) return;
+          setDraft((current) => {
+            const existing = current.providers[provider] ?? {};
+            const next = { ...existing };
+            for (const [key, value] of Object.entries(suggestion)) {
+              if (String(next[key] ?? '').trim() === '') next[key] = String(value);
+            }
+            return { ...current, providers: { ...current.providers, [provider]: next } };
+          });
+          setMessage('');
+        };
         return h(
           'div',
           { className: 'dshrs-card' },
@@ -483,6 +585,9 @@ window.__ModuleLoader__.load({
             { className: 'dshrs-inline' },
             h('div', { className: 'dshrs-card-title' }, t(titleKey)),
             h('span', { className: `dshrs-badge${status ? ' dshrs-badge-on' : ''}` }, status ? t('keySet') : t('keyUnset')),
+            suggestion
+              ? h('button', { className: 'dshrs-btn dshrs-btn-sm', type: 'button', onClick: fillSuggested }, t('suggestAll'))
+              : null,
           ),
           row(
             t('protocol'),
@@ -491,21 +596,69 @@ window.__ModuleLoader__.load({
               'select',
               {
                 className: 'dshrs-select',
-                value: config.protocol ?? 'auto',
+                // Normalise so a value that is not in the list never displays as the first option.
+                value: PROTOCOLS.includes(config.protocol) ? config.protocol : 'auto',
                 onChange: (event) => setProvider(provider, 'protocol')(event.target.value),
               },
               ...PROTOCOLS.map((value) => h('option', { value, key: value }, t(`proto_${value}`))),
             ),
           ),
-          ...fields.map((field) =>
-            row(
+          ...fields.map((field) => {
+            const key = field.key;
+            const value = config[key] ?? '';
+            const suggest = SUGGEST[provider]?.[effective] ?? {};
+            // `path` is derived per protocol, so it never gets a suggested-value chip.
+            const suggested = key !== 'path' && suggest[key] !== undefined && suggest[key] !== '' ? String(suggest[key]) : '';
+            const presets = (MODEL_PRESETS[provider]?.[effective] ?? []).filter((item) => item !== value);
+            const control =
+              field.type === 'area'
+                ? h('textarea', {
+                    className: 'dshrs-area',
+                    value,
+                    placeholder: placeholders(provider, effective, key),
+                    onChange: setProvider(provider, key),
+                  })
+                : fieldInput(value, setProvider(provider, key), {
+                    placeholder: placeholders(provider, effective, key),
+                    ...(field.type === 'number' ? { type: 'number' } : {}),
+                  });
+            const chips = [];
+            if (suggested) {
+              chips.push(
+                h(
+                  'button',
+                  {
+                    className: 'dshrs-chip',
+                    key: `fill-${key}`,
+                    type: 'button',
+                    onClick: () => setProvider(provider, key)(suggested),
+                  },
+                  `${t('suggestFill')} ${suggested}`,
+                ),
+              );
+            }
+            for (const preset of presets) {
+              chips.push(
+                h(
+                  'button',
+                  { className: 'dshrs-chip', key: `preset-${preset}`, type: 'button', onClick: () => setProvider(provider, key)(preset) },
+                  preset,
+                ),
+              );
+            }
+            return row(
               field.label,
               field.hint,
-              field.type === 'area'
-                ? h('textarea', { className: 'dshrs-area', value: config[field.key] ?? '', onChange: setProvider(provider, field.key) })
-                : input(config[field.key] ?? '', setProvider(provider, field.key), field.type === 'number' ? { type: 'number' } : undefined),
-            ),
-          ),
+              chips.length > 0
+                ? h(
+                    'div',
+                    { className: 'dshrs-row', style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
+                    control,
+                    h('div', { className: 'dshrs-chips' }, ...chips),
+                  )
+                : control,
+            );
+          }),
           row(
             t('apiKey'),
             null,
@@ -663,10 +816,11 @@ window.__ModuleLoader__.load({
           [
             { key: 'baseURL', label: t('baseURL') },
             { key: 'path', label: t('path'), hint: t('pathHint') },
-            { key: 'model', label: t('model') },
-            { key: 'voice', label: t('voice') },
+            { key: 'model', label: t('model'), hint: t('modelHint') },
+            { key: 'voice', label: t('voice'), hint: t('voiceHint') },
             { key: 'format', label: t('format') },
             { key: 'language', label: t('language'), hint: t('languageHint') },
+            { key: 'resourceId', label: t('resourceId'), hint: t('resourceIdHint') },
             { key: 'extraBody', label: t('extraBody'), hint: t('extraBodyHint'), type: 'area' },
           ],
           'groupTts',
@@ -676,8 +830,8 @@ window.__ModuleLoader__.load({
           [
             { key: 'baseURL', label: t('baseURL') },
             { key: 'path', label: t('path'), hint: t('pathHint') },
-            { key: 'model', label: t('model') },
-            { key: 'size', label: t('size') },
+            { key: 'model', label: t('model'), hint: t('modelHint') },
+            { key: 'size', label: t('size'), hint: t('sizeHint') },
             { key: 'extraBody', label: t('extraBody'), hint: t('extraBodyHint'), type: 'area' },
           ],
           'groupImage',
