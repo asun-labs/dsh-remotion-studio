@@ -1,0 +1,6 @@
+# remotion-studio — bundle patch: inserts this plugin's single row.
+# Settings live in ~/.dsh/remotion-studio/settings.json (edited from the
+# Web UI settings page, namespace id `remotion-studio`).
+- insert:
+    - id: remotion-studio
+      name: 'remotion-studio'

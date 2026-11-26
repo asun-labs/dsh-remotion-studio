@@ -1,0 +1,47 @@
+{
+  "name": "remotion-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Remotion video studio for DeepSeek Harness: wraps the official Remotion CLI/API (source untouched) with agent tools and one settings page for TTS / image model providers.",
+  "main": "index.js",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "dsh-bundle",
+    "remotion",
+    "video",
+    "tts",
+    "image-generation"
+  ],
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "src",
+    "skill",
+    "locale",
+    "icon.svg",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  }
+}

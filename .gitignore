@@ -1,0 +1,13 @@
+# dependencies
+node_modules/
+
+# render output
+out/
+
+# local / machine specific
+.DS_Store
+Thumbs.db
+*.log
+
+# provider bridge file written into user projects
+public/dsh-providers.json
