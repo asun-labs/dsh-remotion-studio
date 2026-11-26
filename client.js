@@ -4,6 +4,12 @@
  * Rendered as plain React inside the harness (no iframe), styled exclusively
  * with `--dsw-alias-*` theme tokens, talking to the Host over the same-origin
  * `/dsh-remotion/api` endpoint registered by src/api.js.
+ *
+ * Layout contract: the settings shell owns the scrolling column, so the page
+ * contributes content only. Nothing here is `position: sticky/fixed`, and the
+ * save controls sit inline at the end of the content — a sticky footer both
+ * painted over the next card and ended up below the viewport once the shell's
+ * own scroll (and the composer overlay under the modal) took part.
  */
 window.__ModuleLoader__.load({
   id: 'remotion-studio',
@@ -22,6 +28,8 @@ window.__ModuleLoader__.load({
         saving: '保存中…',
         reset: '恢复默认',
         saved: '设置已保存',
+        discard: '放弃修改',
+        unsaved: '有未保存的修改',
         loadFailed: '读取设置失败',
         groupProject: '项目与输出',
         groupTts: '配音服务（TTS）',
@@ -98,6 +106,8 @@ window.__ModuleLoader__.load({
         saving: 'Saving…',
         reset: 'Reset to defaults',
         saved: 'Settings saved',
+        discard: 'Discard changes',
+        unsaved: 'Unsaved changes',
         loadFailed: 'Failed to load settings',
         groupProject: 'Projects & output',
         groupTts: 'Text to speech',
@@ -169,48 +179,41 @@ window.__ModuleLoader__.load({
     };
 
     const css = `
-.dshrs-root{display:flex;flex-direction:column;gap:18px;width:720px;max-width:100%;font-size:13px;color:var(--dsw-alias-label-primary)}
+.dshrs-root{display:flex;flex-direction:column;gap:18px;width:100%;max-width:720px;font-size:13px;color:var(--dsw-alias-label-primary,#0f1115)}
 .dshrs-head{display:flex;flex-direction:column;gap:6px}
-.dshrs-title{font-size:16px;font-weight:600}
-.dshrs-sub{font-size:12px;color:var(--dsw-alias-label-tertiary);line-height:1.6}
-.dshrs-card{border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-1);padding:16px;display:flex;flex-direction:column;gap:12px}
+.dshrs-title{font-size:14px;font-weight:600;line-height:22px}
+.dshrs-sub{font-size:12px;color:var(--dsw-alias-label-secondary,#6b7280);line-height:1.6}
+.dshrs-card{border:1px solid var(--dsw-alias-border-l2,#ffffff1f);border-radius:12px;background:var(--dsw-alias-bg-layer-1,#fff);padding:16px;display:flex;flex-direction:column;gap:12px}
 .dshrs-card-title{font-size:13px;font-weight:600}
 .dshrs-row{display:flex;align-items:flex-start;gap:12px}
-.dshrs-label{width:190px;flex:none;font-size:12px;color:var(--dsw-alias-label-secondary);padding-top:7px;line-height:1.5}
+.dshrs-label{width:190px;flex:none;font-size:12px;color:var(--dsw-alias-label-secondary,#4b5563);padding-top:7px;line-height:1.5}
 .dshrs-control{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
-.dshrs-input,.dshrs-select,.dshrs-area{width:100%;box-sizing:border-box;height:32px;padding:0 10px;border-radius:8px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:13px;font-family:inherit;outline:none}
+.dshrs-input,.dshrs-select,.dshrs-area{width:100%;box-sizing:border-box;height:32px;padding:0 10px;border-radius:8px;border:1px solid var(--dsw-alias-border-l2,#ffffff1f);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#0f1115);font-size:13px;font-family:inherit;outline:none}
+.dshrs-input::placeholder{color:var(--dsw-alias-state-idle-primary,#9ca3af)}
+.dshrs-select option{background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115)}
 .dshrs-area{height:68px;padding:8px 10px;resize:vertical;line-height:1.5}
-.dshrs-box{width:16px;height:16px;margin-top:8px;accent-color:var(--dsw-alias-label-primary);cursor:pointer}
-.dshrs-input:focus,.dshrs-select:focus,.dshrs-area:focus{border-color:var(--dsw-alias-border-l3)}
-.dshrs-hint{font-size:11px;color:var(--dsw-alias-label-tertiary);line-height:1.5}
+.dshrs-box{width:16px;height:16px;margin-top:8px;accent-color:var(--dsw-alias-brand-primary,#0f1115);cursor:pointer}
+.dshrs-input:focus,.dshrs-select:focus,.dshrs-area:focus{border-color:var(--dsw-alias-border-l1,#9ca3af)}
+.dshrs-hint{font-size:11px;color:var(--dsw-alias-label-secondary,#6b7280);line-height:1.5}
 .dshrs-inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.dshrs-btn{height:32px;padding:0 14px;border-radius:16px;border:1px solid var(--dsw-alias-border-l2);background:transparent;color:var(--dsw-alias-label-primary);font-size:12px;cursor:pointer;font-family:inherit}
-.dshrs-btn:hover{background:var(--dsw-alias-bg-layer-2)}
-.dshrs-btn:disabled{opacity:.5;cursor:default}
-.dshrs-btn-primary{background:var(--dsw-alias-button-primary-fill);border-color:transparent;color:var(--dsw-alias-button-primary-label)}
-.dshrs-btn-primary:hover{opacity:.9;background:var(--dsw-alias-button-primary-fill)}
+.dshrs-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 14px;border-radius:16px;border:1px solid var(--dsw-alias-border-l2,#ffffff1f);background:transparent;color:var(--dsw-alias-label-primary,#0f1115);font-size:12px;line-height:1;cursor:pointer;font-family:inherit;white-space:nowrap}
+.dshrs-btn:hover{background:var(--dsw-alias-bg-layer-2,#0000000f)}
+.dshrs-btn:disabled{opacity:.45;cursor:default}
+.dshrs-btn:disabled:hover{background:transparent}
+.dshrs-btn-primary{background:var(--dsw-alias-brand-primary,#0f1115);border-color:transparent;color:var(--dsw-alias-bg-base,#fff)}
+.dshrs-btn-primary:hover{opacity:.88;background:var(--dsw-alias-brand-primary,#0f1115);color:var(--dsw-alias-bg-base,#fff)}
+.dshrs-btn-primary:disabled:hover{background:var(--dsw-alias-brand-primary,#0f1115)}
 .dshrs-btn-sm{height:28px;padding:0 10px;border-radius:14px}
-.dshrs-badge{font-size:11px;padding:2px 8px;border-radius:10px;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-tertiary)}
-.dshrs-badge-on{color:var(--dsw-alias-label-primary)}
-.dshrs-foot{display:flex;align-items:center;gap:12px;position:sticky;bottom:0;padding:12px 0;background:var(--dsw-alias-bg-layer-1)}
-.dshrs-msg{font-size:12px;color:var(--dsw-alias-label-tertiary)}
-.dshrs-msg-err{color:var(--dsw-alias-label-error,#e5484d)}
+.dshrs-badge{font-size:11px;padding:2px 8px;border-radius:10px;border:1px solid var(--dsw-alias-border-l2,#ffffff1f);color:var(--dsw-alias-label-secondary,#6b7280)}
+.dshrs-badge-on{color:var(--dsw-alias-label-primary,#0f1115)}
+.dshrs-foot{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap;padding-top:12px;margin-top:2px;border-top:1px solid var(--dsw-alias-border-l2,#ffffff1f)}
+.dshrs-foot-msg{margin-right:auto;min-width:0}
+.dshrs-msg{font-size:12px;color:var(--dsw-alias-label-secondary,#6b7280)}
+.dshrs-msg-err{color:var(--dsw-alias-state-error-primary,#e5484d)}
 .dshrs-list{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--dsw-alias-label-secondary)}
 .dshrs-check{display:flex;gap:8px;font-size:12px;line-height:1.6}
 .dshrs-preview{max-width:180px;border-radius:8px;border:1px solid var(--dsw-alias-border-l2)}
-.dshrs-mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--dsw-alias-label-tertiary);word-break:break-all}
-.dshrs-panel{height:100%;box-sizing:border-box;overflow:auto;padding:28px 32px 56px}
-.dshrs-panelbar{display:flex;gap:12px;align-items:center;max-width:720px;margin-bottom:16px}
-.dshrs-panel-embed{display:flex;flex-direction:column;height:100%;padding:0;overflow:hidden}
-.dshrs-panel-embed .dshrs-panelbar{max-width:none;margin:0;padding:9px 14px;flex:none;gap:10px;border-bottom:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1)}
-.dshrs-panel-title{font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary);white-space:nowrap}
-.dshrs-select-sm{height:28px;width:auto;max-width:220px;border-radius:8px}
-.dshrs-spacer{flex:1}
-.dshrs-stage{position:relative;flex:1;min-height:0;background:var(--dsw-alias-bg-layer-2)}
-.dshrs-frame{position:absolute;inset:0;width:100%;height:100%;border:0;display:block;background:#fff}
-.dshrs-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:32px;text-align:center;font-size:13px;line-height:1.7;color:var(--dsw-alias-label-secondary)}
-.dshrs-empty p{max-width:520px;margin:0}
-.dshrs-note{padding:8px 14px;font-size:12px;flex:none;border-bottom:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-tertiary)}
+.dshrs-mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--dsw-alias-label-secondary);word-break:break-all}
 `;
 
     function createT(ctx) {
@@ -275,6 +278,17 @@ window.__ModuleLoader__.load({
 
     const CODECS = ['h264', 'h265', 'vp8', 'vp9', 'prores', 'gif', 'mp3', 'wav', 'aac', 'flac'];
 
+    const row = (label, hint, control) =>
+      h(
+        'div',
+        { className: 'dshrs-row' },
+        h('div', { className: 'dshrs-label' }, label),
+        h('div', { className: 'dshrs-control' }, control, hint ? h('div', { className: 'dshrs-hint' }, hint) : null),
+      );
+
+    const input = (value, onChange, extra) =>
+      h('input', { className: 'dshrs-input', value: value ?? '', onChange, ...(extra ?? {}) });
+
     function SettingsPage() {
       const [snapshot, setSnapshot] = React.useState(null);
       const [draft, setDraft] = React.useState(null);
@@ -285,22 +299,22 @@ window.__ModuleLoader__.load({
       const [tests, setTests] = React.useState({});
       const [secretInput, setSecretInput] = React.useState({ tts: '', image: '' });
       const [studioProject, setStudioProject] = React.useState('');
-      const t = tGlobal;
+      const t = (key) => tGlobal(key);
 
-      const applySnapshot = (state) => {
+      const applySnapshot = React.useCallback((state) => {
         if (!state) return;
         setSnapshot(state);
         setDraft(draftFrom(state.settings ?? {}));
-      };
+      }, []);
 
       const load = React.useCallback(async () => {
         setError('');
         try {
           applySnapshot(await call('getState'));
         } catch (caught) {
-          setError(`${t('loadFailed')}：${String(caught?.message ?? caught)}`);
+          setError(`${tGlobal('loadFailed')}：${String(caught?.message ?? caught)}`);
         }
-      }, [t]);
+      }, [applySnapshot]);
 
       React.useEffect(() => {
         void load();
@@ -337,7 +351,7 @@ window.__ModuleLoader__.load({
         try {
           const next = await call('saveSettings', { patch: draft });
           applySnapshot(next);
-          setMessage(t('saved'));
+          setMessage(tGlobal('saved'));
         } catch (caught) {
           setError(String(caught?.message ?? caught));
         } finally {
@@ -349,7 +363,7 @@ window.__ModuleLoader__.load({
         setBusy('reset');
         try {
           applySnapshot(await call('reset'));
-          setMessage(t('resetDone'));
+          setMessage(tGlobal('resetDone'));
         } catch (caught) {
           setError(String(caught?.message ?? caught));
         } finally {
@@ -362,7 +376,7 @@ window.__ModuleLoader__.load({
         try {
           applySnapshot(await call('setSecret', { provider, value: secretInput[provider] }));
           setSecretInput((current) => ({ ...current, [provider]: '' }));
-          setMessage(t('keySaved'));
+          setMessage(tGlobal('keySaved'));
         } catch (caught) {
           setError(String(caught?.message ?? caught));
         } finally {
@@ -374,7 +388,7 @@ window.__ModuleLoader__.load({
         setBusy(`key-${provider}`);
         try {
           applySnapshot(await call('clearSecret', { provider }));
-          setMessage(t('keyCleared'));
+          setMessage(tGlobal('keyCleared'));
         } catch (caught) {
           setError(String(caught?.message ?? caught));
         } finally {
@@ -384,10 +398,9 @@ window.__ModuleLoader__.load({
 
       const runTest = async (provider) => {
         setBusy(`test-${provider}`);
-        setTests((current) => ({ ...current, [provider]: null }));
         try {
           const result = await call('testProvider', { provider });
-          setTests((current) => ({ ...current, [provider]: { ok: true, detail: result.detail, preview: result.preview } }));
+          setTests((current) => ({ ...current, [provider]: result }));
         } catch (caught) {
           setTests((current) => ({ ...current, [provider]: { ok: false, detail: String(caught?.message ?? caught) } }));
         } finally {
@@ -397,27 +410,27 @@ window.__ModuleLoader__.load({
 
       const runDoctor = async () => {
         setBusy('doctor');
-        setChecks(null);
         try {
-          const result = await call('doctor', {});
+          const result = await call('doctor');
           setChecks(result.checks ?? []);
         } catch (caught) {
-          setChecks([{ name: 'error', ok: false, detail: String(caught?.message ?? caught) }]);
+          setChecks([{ name: 'doctor', ok: false, detail: String(caught?.message ?? caught) }]);
         } finally {
           setBusy('');
         }
       };
 
-      const row = (label, hint, control) =>
-        h(
-          'div',
-          { className: 'dshrs-row' },
-          h('div', { className: 'dshrs-label' }, label),
-          h('div', { className: 'dshrs-control' }, control, hint ? h('div', { className: 'dshrs-hint' }, hint) : null),
-        );
-
-      const input = (value, onChange, extra) =>
-        h('input', { className: 'dshrs-input', value: value ?? '', onChange, ...(extra ?? {}) });
+      const openProjectsDir = async () => {
+        setBusy('openDir');
+        setError('');
+        try {
+          await call('openProjectsDir');
+        } catch (caught) {
+          setError(String(caught?.message ?? caught));
+        } finally {
+          setBusy('');
+        }
+      };
 
       const providerCard = (provider, fields, titleKey) => {
         const config = draft.providers[provider] ?? {};
@@ -559,12 +572,7 @@ window.__ModuleLoader__.load({
         'div',
         { className: 'dshrs-root' },
         h('style', { 'data-plugin-css': NS }, css),
-        h(
-          'div',
-          { className: 'dshrs-head' },
-          h('div', { className: 'dshrs-title' }, t('title')),
-          h('div', { className: 'dshrs-sub' }, t('subtitle')),
-        ),
+        h('div', { className: 'dshrs-head' }, h('div', { className: 'dshrs-sub' }, t('subtitle'))),
         studioCard,
         h(
           'div',
@@ -630,6 +638,7 @@ window.__ModuleLoader__.load({
             'div',
             { className: 'dshrs-inline' },
             h('button', { className: 'dshrs-btn dshrs-btn-sm', disabled: busy !== '', onClick: runDoctor }, busy === 'doctor' ? t('checking') : t('doctor')),
+            h('button', { className: 'dshrs-btn dshrs-btn-sm', disabled: busy !== '', onClick: openProjectsDir }, t('openDir')),
           ),
           checks
             ? h(
@@ -658,27 +667,56 @@ window.__ModuleLoader__.load({
               ),
           h('div', { className: 'dshrs-mono' }, `${t('settingsFile')}: ${snapshot.paths?.settingsFile ?? ''}`),
           h('div', { className: 'dshrs-mono' }, `${t('runtime')}: Node ${snapshot.runtime?.node ?? '?'} · ${snapshot.runtime?.platform ?? ''}`),
-        ),
-        h(
-          'div',
-          { className: 'dshrs-foot' },
-          h('button', { className: 'dshrs-btn dshrs-btn-primary', disabled: busy !== '', onClick: save }, busy === 'save' ? t('saving') : t('save')),
-          h('button', { className: 'dshrs-btn', disabled: busy !== '', onClick: reset }, t('reset')),
-          h('div', { className: `dshrs-msg${error ? ' dshrs-msg-err' : ''}` }, error || message),
+          // Save controls close out this card in normal flow: the settings
+          // shell owns the scrolling column, so anything sticky or portalled
+          // would paint over whatever card scrolls beneath it.
+          h(
+            'div',
+            { className: 'dshrs-foot' },
+            h('div', { className: 'dshrs-foot-msg dshrs-msg' + (error ? ' dshrs-msg-err' : '') }, error || message),
+            h('button', { className: 'dshrs-btn', disabled: busy !== '', onClick: load }, t('discard')),
+            h('button', { className: 'dshrs-btn', disabled: busy !== '', onClick: reset }, t('reset')),
+            h('button', { className: 'dshrs-btn dshrs-btn-primary', disabled: busy !== '', onClick: save }, busy === 'save' ? t('saving') : t('save')),
+          ),
         ),
       );
     }
 
-    let injectCtx = null;
     let tGlobal = (key) => DICT.zh[key] || key;
+
+    /**
+     * Nav icon for this section. The shell draws the settings nav row itself
+     * and asks `settings.section.icon` for the glyph addressed by the matching
+     * `settings.section` id, so this gets only the id and must paint inline.
+     */
+    function SectionIcon(props) {
+      const size = Number(props?.size) || 16;
+      return h(
+        'svg',
+        {
+          viewBox: '0 0 24 24',
+          width: size,
+          height: size,
+          fill: 'none',
+          xmlns: 'http://www.w3.org/2000/svg',
+          'aria-hidden': 'true',
+          style: { display: 'block' },
+        },
+        h('rect', { x: 2.25, y: 4.75, width: 13.5, height: 14.5, rx: 3, stroke: 'currentColor', 'stroke-width': 1.6 }),
+        h('path', { d: 'M9 9.4v5.2l4.4-2.6L9 9.4Z', fill: 'currentColor' }),
+        h('path', { d: 'M18 8.6v6.8M20.75 10.2v3.6', stroke: 'currentColor', 'stroke-width': 1.6, 'stroke-linecap': 'round' }),
+      );
+    }
 
     return {
       inject: ['slots', 'locale'],
       apply(ctx) {
-        injectCtx = ctx;
         tGlobal = createT(ctx);
         ctx.slots.inject('settings.section', () =>
           ctx.slots.register({ name: 'settings.section', id: NS, order: 60, label: () => tGlobal('nav') }, SettingsPage),
+        );
+        ctx.slots.inject('settings.section.icon', () =>
+          ctx.slots.register({ name: 'settings.section.icon', id: NS, order: 0 }, SectionIcon),
         );
       },
     };
