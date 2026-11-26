@@ -10,7 +10,7 @@ import { readFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BRIDGE_PATH, isBridgeToken, isLocalOrigin } from './bridge.js';
-import { generateImage, synthesizeSpeech } from './providers.js';
+import { generateImage, synthesizeSpeech, PROTOCOL_LABEL } from './providers.js';
 import { doctor, listProjects, projectPath } from './runner.js';
 import { sameOrigin } from './settings.js';
 import { startStudio, studioFor, studioReady, stopStudio, waitUntilReady } from './studio.js';
@@ -64,6 +64,8 @@ async function testProvider(provider, { store, logger }) {
   const apiKey = await store.readSecret(provider);
   if (!config.baseURL) throw new Error(`还没有填写${provider === 'tts' ? ' TTS ' : '生图'}服务地址 baseURL`);
   const started = Date.now();
+  const suffix = (result) =>
+    result.protocol ? `，协议 ${PROTOCOL_LABEL[result.protocol] ?? result.protocol}` : '';
   if (provider === 'tts') {
     const outFile = join(tmpdir(), `dsh-remotion-tts-${Date.now()}.${config.format || 'mp3'}`);
     try {
@@ -73,7 +75,10 @@ async function testProvider(provider, { store, logger }) {
         text: '你好，这是一次模型服务连通性测试。',
         outFile,
       });
-      return { ok: true, detail: `合成成功：${formatBytes(result.bytes)}，用时 ${Date.now() - started} ms` };
+      return {
+        ok: true,
+        detail: `合成成功：${formatBytes(result.bytes)}，用时 ${Date.now() - started} ms${suffix(result)}`,
+      };
     } finally {
       try {
         unlinkSync(outFile);
@@ -93,14 +98,17 @@ async function testProvider(provider, { store, logger }) {
     });
     let preview;
     try {
-      const bytes = readFileSync(outFile);
-      if (bytes.length < 1_500_000) preview = `data:image/png;base64,${bytes.toString('base64')}`;
+      const bytes = readFileSync(result.path ?? outFile);
+      if (bytes.length < 1_500_000) {
+        const mime = /^jpg$/i.test(String(result.path ?? '').split('.').pop()) ? 'image/jpeg' : 'image/png';
+        preview = `data:${mime};base64,${bytes.toString('base64')}`;
+      }
     } catch (error) {
       logger?.warn?.(`[remotion-studio] preview read failed: ${String(error?.message ?? error)}`);
     }
     return {
       ok: true,
-      detail: `生成成功：${formatBytes(result.bytes)}，用时 ${Date.now() - started} ms`,
+      detail: `生成成功：${formatBytes(result.bytes)}，用时 ${Date.now() - started} ms${suffix(result)}`,
       preview,
     };
   } finally {

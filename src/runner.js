@@ -119,7 +119,8 @@ export function providerEnv(settings, secrets) {
   const tts = settings.providers?.tts ?? {};
   if (tts.baseURL) {
     env.DSH_TTS_BASE_URL = String(tts.baseURL);
-    env.DSH_TTS_PATH = String(tts.path ?? '/audio/speech');
+    env.DSH_TTS_PROTOCOL = String(tts.protocol || 'auto');
+    env.DSH_TTS_PATH = String(tts.path ?? '');
     env.DSH_TTS_MODEL = String(tts.model ?? '');
     env.DSH_TTS_VOICE = String(tts.voice ?? '');
     env.DSH_TTS_FORMAT = String(tts.format ?? 'mp3');
@@ -129,7 +130,8 @@ export function providerEnv(settings, secrets) {
   const image = settings.providers?.image ?? {};
   if (image.baseURL) {
     env.DSH_IMAGE_BASE_URL = String(image.baseURL);
-    env.DSH_IMAGE_PATH = String(image.path ?? '/images/generations');
+    env.DSH_IMAGE_PROTOCOL = String(image.protocol || 'auto');
+    env.DSH_IMAGE_PATH = String(image.path ?? '');
     env.DSH_IMAGE_MODEL = String(image.model ?? '');
     env.DSH_IMAGE_SIZE = String(image.size ?? '1024x1024');
     if (image.extraBody) env.DSH_IMAGE_EXTRA_BODY = String(image.extraBody);
@@ -228,7 +230,8 @@ export function writeProvidersFile(projectDir, settings, secrets) {
   if (tts.baseURL) {
     payload.tts = {
       baseURL: String(tts.baseURL),
-      path: String(tts.path || '/audio/speech'),
+      protocol: String(tts.protocol || 'auto'),
+      path: String(tts.path || ''),
       model: String(tts.model ?? ''),
       voice: String(tts.voice ?? ''),
       format: String(tts.format || 'mp3'),
@@ -240,7 +243,8 @@ export function writeProvidersFile(projectDir, settings, secrets) {
   if (image.baseURL) {
     payload.image = {
       baseURL: String(image.baseURL),
-      path: String(image.path || '/images/generations'),
+      protocol: String(image.protocol || 'auto'),
+      path: String(image.path || ''),
       model: String(image.model ?? ''),
       size: String(image.size || '1024x1024'),
       extraBody: parseMaybeJson(image.extraBody),

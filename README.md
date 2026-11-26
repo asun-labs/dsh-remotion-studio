@@ -73,9 +73,23 @@ Skill 与插件的对应关系：
 
 - **项目与输出**：项目目录、输出目录、默认编码、并发、附加渲染参数、超时、npm 源、
   新建项目使用的 Remotion 版本、浏览器模式（自动下载 / 本机 Chrome）。
-- **配音服务**、**生图服务**：OpenAI 兼容 `baseURL` + 接口路径 + 模型 + 音色/尺寸 + 附加请求体，
-  以及 **API Key**（存入 Host 的 credential record，不写进设置文件）与「测试连通性」按钮。
+- **配音服务**、**生图服务**：**接口协议**下拉 + `baseURL` + 接口路径 + 模型 + 音色/尺寸 +
+  附加请求体，以及 **API Key**（存入 Host 的 credential record，不写进设置文件）与「测试连通性」按钮。
 - **环境与项目**：一键环境检查、已有项目列表、配置文件位置。
+
+### 接口协议（各家差异由插件吃掉）
+
+配音与生图各有一个「接口协议」下拉，默认 `auto`（依次探测，哪种返回真实音频/图片就用哪种）：
+
+| 协议 | 典型 `baseURL` | 默认接口路径（留空即用） | 备注 |
+| --- | --- | --- | --- |
+| `openai` | `https://api.openai.com/v1` | `/audio/speech`、`/images/generations` | 各类 OpenAI 兼容聚合站、自建 vLLM/Ollama |
+| `dashscope` | `https://dashscope.aliyuncs.com` | `/api/v1/services/aigc/multimodal-generation/generation`（TTS 亦可用 `/api/v1/services/audio/tts/SpeechSynthesizer`） | 阿里云百炼；响应给的是 URL，插件自动下载；TTS 可填 `language` |
+| `ark` | `https://ark.cn-beijing.volces.com/api/plan/v3` | `/images/generations` | 火山方舟生图，`data[0].url` 约 24 小时有效；需 Agent Plan 专属 Key |
+| `openspeech` | `https://openspeech.bytedance.com` | `/api/v3/tts/unidirectional` | 火山语音 TTS，`x-api-key` 鉴权，`req_params{text,speaker,audio_params}` |
+
+选错协议不会静默失败：显式选协议时错误以 `请求失败（协议名）：…` 开头，`auto` 则列出每个协议的失败原因。
+需要服务商特有参数时，把 JSON 写进「附加请求体」，插件会合并进请求体。
 
 非密钥设置保存在 `~/.dsh/remotion-studio/settings.json`；密钥通过 `credentials` 服务的
 `remotion-studio.tts` / `remotion-studio.image` record 管理（该服务不可用时回退到设置文件内的 `_secrets`）。
@@ -116,7 +130,7 @@ skill/remotion-studio.md  Skill 说明书（给模型读的流程与坑清单）
 src/skill.js        Skill 注册（读说明书 → ctx.skills.register）
 src/settings.js     设置与密钥存储
 src/runner.js       Remotion CLI 定位、进程执行、dsh-providers.json 生成
-src/providers.js    TTS / 生图 HTTP 调用
+src/providers.js    TTS / 生图多协议适配（openai / dashscope / ark / openspeech + auto）
 src/scaffold.js     标准 Remotion 工程模板
 src/tools.js        agent 工具定义
 src/api.js          /dsh-remotion/api 设置与 Studio 接口 + /dsh-remotion/bridge 服务商代理

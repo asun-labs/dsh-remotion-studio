@@ -42,17 +42,29 @@ export const DEFAULTS = {
   remotionVersion: '4.0.546',
   providers: {
     tts: {
+      /**
+       * Wire protocol: auto | openai | dashscope | ark | openspeech.
+       * `auto` probes the known shapes until one answers with real audio.
+       */
+      protocol: 'auto',
       baseURL: '',
-      path: '/audio/speech',
+      /** Blank = the protocol's documented endpoint. */
+      path: '',
       model: '',
       voice: '',
       format: 'mp3',
+      /** Qwen-TTS `language_type` (dashscope only). */
+      language: '',
+      /** 火山语音 `req_params.audio_params.sample_rate`. */
+      sampleRate: 0,
       /** Extra JSON merged into the request body (provider-specific knobs). */
       extraBody: '',
     },
     image: {
+      protocol: 'auto',
       baseURL: '',
-      path: '/images/generations',
+      /** Blank = the protocol's documented endpoint. */
+      path: '',
       model: '',
       size: '1024x1024',
       extraBody: '',

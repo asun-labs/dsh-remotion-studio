@@ -51,11 +51,25 @@ window.__ModuleLoader__.load({
         chromeDownload: '由 Remotion 自动下载',
         chromePath: '使用本机 Chrome',
         chromePathLabel: 'Chrome 可执行文件路径',
-        baseURL: '服务地址（OpenAI 兼容 baseURL）',
+        baseURL: '服务地址（baseURL）',
         path: '接口路径',
+        pathHint: '留空则用所选协议的默认端点；只有服务商给了特殊路径时才填',
+        protocol: '接口协议',
+        proto_auto: '自动识别（推荐）',
+        proto_openai: 'OpenAI 兼容',
+        proto_dashscope: '阿里云百炼 DashScope',
+        proto_ark: '火山方舟 Ark',
+        proto_openspeech: '火山语音 openspeech',
+        protoHint_auto: '依次尝试下面的几种协议，哪种返回真实音频/图片就用哪种；最省事。',
+        protoHint_openai: 'POST 到 baseURL+path，请求体 {input|prompt, model, voice|size}，返回音频字节或 data[0].b64_json/url。适用于 OpenAI 官方、各类聚合站、本地 vLLM/Ollama。',
+        protoHint_dashscope: '阿里云百炼：接口路径默认 /api/v1/services/aigc/multimodal-generation/generation（TTS 也可用 /api/v1/services/audio/tts/SpeechSynthesizer），返回里是音频/图片 URL，插件会自动下载。',
+        protoHint_ark: '火山方舟：生图走 /images/generations 返回 data[0].url（有效期约 24 小时）；必须用 Agent Plan 专属 Key，baseURL 通常含 /api/plan/v3。',
+        protoHint_openspeech: '火山语音：POST /api/v3/tts/unidirectional，鉴权头 x-api-key，请求体 {req_params:{text,speaker,audio_params}}，返回 base64 音频分块。',
         model: '模型',
         voice: '音色',
         format: '输出格式',
+        language: '语言（可选）',
+        languageHint: '仅 Qwen-TTS 用：Chinese / English 等；其他协议留空即可',
         size: '图片尺寸',
         extraBody: '附加请求体（JSON）',
         extraBodyHint: '会合并进请求 body，用于服务商特有参数',
@@ -129,11 +143,25 @@ window.__ModuleLoader__.load({
         chromeDownload: 'Downloaded by Remotion',
         chromePath: 'Local Chrome',
         chromePathLabel: 'Chrome executable path',
-        baseURL: 'Base URL (OpenAI-compatible)',
+        baseURL: 'Base URL',
         path: 'Endpoint path',
+        pathHint: 'Leave blank to use the selected protocol default; fill it only when the provider documents a special path',
+        protocol: 'Wire protocol',
+        proto_auto: 'Auto-detect (recommended)',
+        proto_openai: 'OpenAI-compatible',
+        proto_dashscope: 'Alibaba DashScope',
+        proto_ark: 'Volcengine Ark',
+        proto_openspeech: 'Volcengine openspeech',
+        protoHint_auto: 'Tries the protocols below until one returns real audio or image data — the least fiddly choice.',
+        protoHint_openai: 'POST baseURL+path with {input|prompt, model, voice|size}; expects audio bytes or data[0].b64_json/url. Works with OpenAI, aggregators and local vLLM/Ollama.',
+        protoHint_dashscope: 'Alibaba Cloud Bailian: default path /api/v1/services/aigc/multimodal-generation/generation (TTS may also use /api/v1/services/audio/tts/SpeechSynthesizer). Answers with a URL, which the plugin downloads for you.',
+        protoHint_ark: 'Volcengine Ark: images via /images/generations returning data[0].url (valid ~24h). Requires an Agent Plan key; the base URL usually contains /api/plan/v3.',
+        protoHint_openspeech: 'Volcengine speech: POST /api/v3/tts/unidirectional with x-api-key and {req_params:{text,speaker,audio_params}}; answers with base64 audio chunks.',
         model: 'Model',
         voice: 'Voice',
         format: 'Format',
+        language: 'Language (optional)',
+        languageHint: 'Qwen-TTS only: Chinese / English etc. Leave blank for other protocols',
         size: 'Image size',
         extraBody: 'Extra request body (JSON)',
         extraBodyHint: 'Merged into the request body for provider-specific options',
@@ -337,7 +365,7 @@ window.__ModuleLoader__.load({
       };
 
       const setProvider = (provider, key) => (event) => {
-        const value = event.target.value;
+        const value = event.target && 'target' in event ? event.target.value : event;
         setDraft((current) => ({
           ...current,
           providers: { ...current.providers, [provider]: { ...current.providers[provider], [key]: value } },
@@ -432,10 +460,13 @@ window.__ModuleLoader__.load({
         }
       };
 
+      const PROTOCOLS = ['auto', 'openai', 'dashscope', 'ark', 'openspeech'];
+
       const providerCard = (provider, fields, titleKey) => {
         const config = draft.providers[provider] ?? {};
         const status = snapshot.settings?.providers?.[provider]?.apiKeyConfigured;
         const test = tests[provider];
+        const protocolHint = config.protocol && config.protocol !== 'auto' ? t(`protoHint_${config.protocol}`) : t('protoHint_auto');
         return h(
           'div',
           { className: 'dshrs-card' },
@@ -445,7 +476,19 @@ window.__ModuleLoader__.load({
             h('div', { className: 'dshrs-card-title' }, t(titleKey)),
             h('span', { className: `dshrs-badge${status ? ' dshrs-badge-on' : ''}` }, status ? t('keySet') : t('keyUnset')),
           ),
-          h('div', { className: 'dshrs-hint' }, t('emptyBase')),
+          row(
+            t('protocol'),
+            protocolHint,
+            h(
+              'select',
+              {
+                className: 'dshrs-select',
+                value: config.protocol ?? 'auto',
+                onChange: (event) => setProvider(provider, 'protocol')(event.target.value),
+              },
+              ...PROTOCOLS.map((value) => h('option', { value, key: value }, t(`proto_${value}`))),
+            ),
+          ),
           ...fields.map((field) =>
             row(
               field.label,
@@ -611,10 +654,11 @@ window.__ModuleLoader__.load({
           'tts',
           [
             { key: 'baseURL', label: t('baseURL') },
-            { key: 'path', label: t('path') },
+            { key: 'path', label: t('path'), hint: t('pathHint') },
             { key: 'model', label: t('model') },
             { key: 'voice', label: t('voice') },
             { key: 'format', label: t('format') },
+            { key: 'language', label: t('language'), hint: t('languageHint') },
             { key: 'extraBody', label: t('extraBody'), hint: t('extraBodyHint'), type: 'area' },
           ],
           'groupTts',
@@ -623,7 +667,7 @@ window.__ModuleLoader__.load({
           'image',
           [
             { key: 'baseURL', label: t('baseURL') },
-            { key: 'path', label: t('path') },
+            { key: 'path', label: t('path'), hint: t('pathHint') },
             { key: 'model', label: t('model') },
             { key: 'size', label: t('size') },
             { key: 'extraBody', label: t('extraBody'), hint: t('extraBodyHint'), type: 'area' },

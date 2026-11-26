@@ -199,6 +199,8 @@ const PROVIDERS_TS = `/**
 import { continueRender, delayRender, staticFile } from 'remotion';
 
 export type ProviderConfig = {
+  /** auto | openai | dashscope | ark | openspeech — the Host bridge honours it. */
+  protocol?: string;
   baseURL?: string;
   path?: string;
   model?: string;
@@ -245,6 +247,46 @@ export function loadProviders(): Promise<ProvidersBridge> {
 
 function joinUrl(base: string, path: string): string {
   return base.replace(/\\/+$/, '') + '/' + path.replace(/^\\/+/, '');
+}
+
+/** First http(s) URL in a JSON tree, preferring one whose path matches ext. */
+function findUrl(node: unknown, ext?: RegExp): string | undefined {
+  let hit: string | undefined;
+  let fallback: string | undefined;
+  const walk = (value: unknown, depth: number) => {
+    if (hit || depth > 8 || value === null || value === undefined) return;
+    if (typeof value === 'string') {
+      if (!/^https?:\\/\\//i.test(value)) return;
+      if (!ext || ext.test(value)) hit = value;
+      else if (!fallback) fallback = value;
+      return;
+    }
+    if (typeof value === 'object') {
+      for (const child of Array.isArray(value) ? value : Object.values(value as Record<string, unknown>)) {
+        walk(child, depth + 1);
+      }
+    }
+  };
+  walk(node, 0);
+  return hit ?? fallback;
+}
+
+const AUDIO_DEFAULT_PATH: Record<string, string> = {
+  openai: '/audio/speech',
+  dashscope: '/api/v1/services/aigc/multimodal-generation/generation',
+  ark: '/api/v3/tts/unidirectional',
+  openspeech: '/api/v3/tts/unidirectional',
+};
+
+const IMAGE_DEFAULT_PATH: Record<string, string> = {
+  openai: '/images/generations',
+  ark: '/images/generations',
+  dashscope: '/api/v1/services/aigc/multimodal-generation/generation',
+};
+
+function protocolOf(config: ProviderConfig): string {
+  const raw = String(config.protocol ?? 'openai').toLowerCase();
+  return raw === 'auto' ? 'openai' : raw;
 }
 
 async function toDataUrl(bytes: ArrayBuffer, mime: string): Promise<string> {
@@ -314,20 +356,41 @@ export async function speak(
     ...(options.model ? { model: options.model } : {}),
   });
   if (bridged) return bridged;
-  const body = {
-    input: text,
-    model: options.model || tts.model || undefined,
-    voice: options.voice || tts.voice || undefined,
-    response_format: format,
-    ...(tts.extraBody ?? {}),
-  };
-  const response = await fetch(joinUrl(tts.baseURL, tts.path || '/audio/speech'), {
+  // Direct-browser fallback: build the same body the chosen protocol expects.
+  const protocol = protocolOf(tts);
+  const model = options.model || tts.model || '';
+  const voice = options.voice || tts.voice || '';
+  const extra = tts.extraBody ?? {};
+  const body =
+    protocol === 'dashscope'
+      ? {
+          model,
+          input: { text, ...(voice ? { voice } : {}), ...(format && format !== 'mp3' ? { format } : {}) },
+          ...extra,
+        }
+      : protocol === 'ark' || protocol === 'openspeech'
+        ? {
+            ...(model ? { model } : {}),
+            req_params: { text, ...(voice ? { speaker: voice } : {}), audio_params: { format } },
+            ...extra,
+          }
+        : {
+            input: text,
+            ...(model ? { model } : {}),
+            ...(voice ? { voice } : {}),
+            response_format: format,
+            ...extra,
+          };
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (tts.apiKey) {
+    if (protocol === 'ark' || protocol === 'openspeech') headers['x-api-key'] = tts.apiKey;
+    else headers.authorization = 'Bearer ' + tts.apiKey;
+  }
+  const endpoint = joinUrl(tts.baseURL, tts.path || AUDIO_DEFAULT_PATH[protocol] || '/audio/speech');
+  const response = await fetch(endpoint, {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      ...(tts.apiKey ? { authorization: 'Bearer ' + tts.apiKey } : {}),
-    },
-    body: JSON.stringify(Object.fromEntries(Object.entries(body).filter(([, value]) => value !== undefined && value !== ''))),
+    headers,
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     throw new Error('TTS HTTP ' + response.status + '：' + (await response.text()).slice(0, 300));
@@ -335,9 +398,18 @@ export async function speak(
   const contentType = response.headers.get('content-type') ?? '';
   if (contentType.includes('application/json')) {
     const json: any = await response.json();
-    const base64 = typeof json?.audio === 'string' ? json.audio : typeof json?.data === 'string' ? json.data : null;
-    if (!base64) throw new Error('TTS 响应里没有音频数据');
-    return 'data:audio/' + (format === 'mp3' ? 'mpeg' : format) + ';base64,' + base64;
+    const direct = json?.audio ?? json?.audioContent ?? (typeof json?.data === 'string' ? json.data : null);
+    if (typeof direct === 'string') {
+      const marker = direct.indexOf('base64,');
+      return 'data:audio/' + (format === 'mp3' ? 'mpeg' : format) + ';base64,' + (marker >= 0 ? direct.slice(marker + 7) : direct);
+    }
+    // Some providers answer with a URL instead of bytes (DashScope Qwen-TTS).
+    const remote = findUrl(json, /\\.(mp3|wav|m4a|aac|ogg|flac)(\\?|$)/i) ?? findUrl(json);
+    if (remote) {
+      const download = await fetch(remote);
+      return toDataUrl(await download.arrayBuffer(), 'audio/mpeg');
+    }
+    throw new Error('TTS 响应里没有音频数据');
   }
   return toDataUrl(await response.arrayBuffer(), 'audio/' + (format === 'mp3' ? 'mpeg' : format));
 }
@@ -357,21 +429,35 @@ export async function generateImage(
     ...(options.model ? { model: options.model } : {}),
   });
   if (bridged) return bridged;
-  const response = await fetch(joinUrl(image.baseURL, image.path || '/images/generations'), {
+  const protocol = protocolOf(image);
+  const model = options.model || image.model || '';
+  const size = options.size || image.size || '1024x1024';
+  const extra = image.extraBody ?? {};
+  const body =
+    protocol === 'dashscope'
+      ? {
+          model,
+          input: { messages: [{ role: 'user', content: [{ text: prompt }] }] },
+          parameters: { size, ...extra },
+        }
+      : protocol === 'ark'
+        ? { ...(model ? { model } : {}), prompt, size, response_format: 'url', ...extra }
+        : {
+            prompt,
+            n: 1,
+            ...(model ? { model } : {}),
+            size,
+            // No response_format here: gpt-image-1 rejects it, and both base64
+            // and url answers are handled below.
+            ...extra,
+          };
+  const response = await fetch(joinUrl(image.baseURL, image.path || IMAGE_DEFAULT_PATH[protocol] || '/images/generations'), {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       ...(image.apiKey ? { authorization: 'Bearer ' + image.apiKey } : {}),
     },
-    body: JSON.stringify({
-      prompt,
-      n: 1,
-      model: options.model || image.model || undefined,
-      size: options.size || image.size || '1024x1024',
-      // No response_format here: gpt-image-1 rejects it, and both base64
-      // and url answers are handled below.
-      ...(image.extraBody ?? {}),
-    }),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     throw new Error('生图 HTTP ' + response.status + '：' + (await response.text()).slice(0, 300));
@@ -379,8 +465,14 @@ export async function generateImage(
   const json: any = await response.json();
   const item = json?.data?.[0] ?? json?.output?.[0] ?? json;
   if (typeof item?.b64_json === 'string') return 'data:image/png;base64,' + item.b64_json;
-  if (typeof item?.url === 'string') {
-    const download = await fetch(item.url);
+  // Some protocols nest the image URL deeper (DashScope: output.choices[0].message.content[0].image).
+  const remote =
+    (typeof item?.url === 'string' ? item.url : undefined) ??
+    (typeof item?.image === 'string' ? item.image : undefined) ??
+    findUrl(json, /\\.(png|jpe?g|webp|gif|bmp|avif)(\\?|$)/i) ??
+    findUrl(json);
+  if (remote) {
+    const download = await fetch(remote);
     return toDataUrl(await download.arrayBuffer(), 'image/png');
   }
   throw new Error('生图响应里没有图片数据');
