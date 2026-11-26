@@ -126,9 +126,11 @@ schema；外部 MCP server 的工具也走这张表。
 6. **`response_format: 'b64_json'` 不是所有模型都吃**（例如 gpt-image-1 会 400），直连时别硬写。
 7. **协议选错只是报错，不会静默失败**：显式选协议时错误以 `请求失败（协议名）：…` 开头；
    `auto` 会列出每个协议各自的失败原因（`所有接口协议都没成功（A / B / C）`）。
-7. **改插件源码后要重载**：`plugin_manager remove_bundle` → `install_bundle`，
+8. **接口路径留空才用协议默认端点**：老版本会把 `/audio/speech`、`/images/generations`
+   写进配置文件；如果换了 dashscope/ark/openspeech 却忘了清空路径，会打到错误的地址。
+9. **改插件源码后要重载**：`plugin_manager remove_bundle` → `install_bundle`，
    否则旧 Host 模块继续跑（`already-installed` 表示没重载）。
-8. **不要动 `node_modules`**：那等于改 Remotion 源码，升级即丢，也破坏「零修改」承诺。
+10. **不要动 `node_modules`**：那等于改 Remotion 源码，升级即丢，也破坏「零修改」承诺。
    需要额外能力就用 CLI 透传或 `remotion.config.ts` 的官方 API。
 
 ## 官方文档
