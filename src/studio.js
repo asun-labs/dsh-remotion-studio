@@ -131,14 +131,10 @@ export async function startStudio({ dir, settings, secrets, port }) {
   const url = `http://localhost:${chosen}`;
   const info = { port: chosen, url, pid: child.pid, startedAt: Date.now() };
   studios.set(dir, info);
-  // The page only answers once webpack finished its first build, so open the
-  // browser after it is actually reachable instead of on a blank error page.
+  // Opening the browser is the caller's job: the page only answers once webpack
+  // finished its first build, so the caller waits for readiness and then opens.
+  // Doing it here as well used to open a second tab on every start.
   const autoOpen = settings?.autoOpenStudio !== false;
-  if (autoOpen) {
-    void waitUntilReady(url, { timeoutMs: 180000 }).then((ok) => {
-      if (ok) openInBrowser(url);
-    });
-  }
   return { url, port: chosen, pid: child.pid, started: true, autoOpen };
 }
 

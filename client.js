@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
         groupProject: '项目与输出',
         groupTts: '配音服务（TTS）',
         groupImage: '生图服务',
-        groupStatus: '环境与项目',
+        groupStatus: '环境',
         projectsDir: '项目目录',
         projectsDirHint: '项目存放目录，支持 ~ 开头',
         outDir: '输出目录',
@@ -70,19 +70,13 @@ window.__ModuleLoader__.load({
         protoHint_arkplan: '火山方舟订阅套餐 key（ark- 开头，/api/plan 路径）。',
         protoHint_openspeech: '火山语音服务（openspeech 域名，仅配音）。',
         model: '模型',
-        modelHint: '服务商控制台里的模型 ID，照抄即可',
         voice: '音色',
-        voiceHint: '服务商提供的音色 ID',
         format: '输出格式',
         language: '语言（可选）',
         languageHint: '仅 Qwen-TTS 用，其他留空',
         size: '图片尺寸',
-        sizeHint: '火山方舟需 ≥ 1024x1024（建议 2048x2048）',
         resourceId: '资源 ID（可选）',
-        resourceIdHint: 'Agent Plan 固定 seed-tts-2.0',
-        suggestFill: '填入',
-        suggestAll: '一并填入推荐值',
-        suggestedHint: '来自上面选中的协议，可改。',
+        customValue: '自定义',
         extraBody: '附加请求体（JSON）',
         extraBodyHint: '合并进请求 body',
         apiKey: 'API Key',
@@ -94,10 +88,8 @@ window.__ModuleLoader__.load({
         testing: '测试中…',
         doctor: '检查环境',
         checking: '检查中…',
-        projects: '已有项目',
+        groupStatus: '环境',
         noProjects: '还没有项目，让助手新建。',
-        installed: '依赖已安装',
-        notInstalled: '依赖未安装',
         settingsFile: '配置文件',
         runtime: '运行环境',
         emptyBase: '不配服务商也能渲染，只是不能自动配音/配图。',
@@ -138,7 +130,7 @@ window.__ModuleLoader__.load({
         groupProject: 'Projects & output',
         groupTts: 'Text to speech',
         groupImage: 'Image generation',
-        groupStatus: 'Environment & projects',
+        groupStatus: 'Environment',
         projectsDir: 'Projects directory',
         projectsDirHint: 'Where projects live; ~ is expanded',
         outDir: 'Output folder',
@@ -174,19 +166,13 @@ window.__ModuleLoader__.load({
         protoHint_arkplan: 'Volcengine Ark subscription key (ark-, /api/plan paths).',
         protoHint_openspeech: 'Volcengine speech service (openspeech domain, speech only).',
         model: 'Model',
-        modelHint: 'The model ID from the provider console',
         voice: 'Voice',
-        voiceHint: 'A voice ID the provider offers',
         format: 'Format',
         language: 'Language (optional)',
         languageHint: 'Qwen-TTS only; leave blank otherwise',
         size: 'Image size',
-        sizeHint: 'Volcengine Ark needs at least 1024x1024 (2048x2048 recommended)',
         resourceId: 'Resource ID (optional)',
-        resourceIdHint: 'Agent Plan: always seed-tts-2.0',
-        suggestFill: 'Fill',
-        suggestAll: 'Fill all suggested values',
-        suggestedHint: 'From the selected protocol; editable.',
+        customValue: 'Custom',
         extraBody: 'Extra request body (JSON)',
         extraBodyHint: 'Merged into the request body',
         apiKey: 'API key',
@@ -198,10 +184,7 @@ window.__ModuleLoader__.load({
         testing: 'Testing…',
         doctor: 'Check environment',
         checking: 'Checking…',
-        projects: 'Projects',
         noProjects: 'No projects yet — ask the assistant to scaffold one.',
-        installed: 'dependencies installed',
-        notInstalled: 'dependencies missing',
         settingsFile: 'Settings file',
         runtime: 'Runtime',
         emptyBase: 'Rendering works without a provider — only voice-over and images need one.',
@@ -243,9 +226,6 @@ window.__ModuleLoader__.load({
 .dshrs-input,.dshrs-select,.dshrs-area{width:100%;box-sizing:border-box;height:32px;padding:0 10px;border-radius:8px;border:1px solid var(--dsw-alias-border-l2,#ffffff1f);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#0f1115);font-size:13px;font-family:inherit;outline:none}
 .dshrs-input::placeholder{color:var(--dsw-alias-state-idle-primary,#9ca3af)}
 .dshrs-select option{background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115)}
-.dshrs-chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
-.dshrs-chip{height:24px;padding:0 10px;border-radius:12px;border:1px solid var(--dsw-alias-border-l2,#ffffff1f);background:transparent;color:var(--dsw-alias-label-secondary,#6b7280);font-size:11px;line-height:1;cursor:pointer;font-family:inherit;white-space:nowrap}
-.dshrs-chip:hover{background:var(--dsw-alias-bg-layer-2,#0000000f);color:var(--dsw-alias-label-primary,#0f1115)}
 .dshrs-area{height:68px;padding:8px 10px;resize:vertical;line-height:1.5}
 .dshrs-box{width:16px;height:16px;margin-top:8px;accent-color:var(--dsw-alias-brand-primary,#0f1115);cursor:pointer}
 .dshrs-input:focus,.dshrs-select:focus,.dshrs-area:focus{border-color:var(--dsw-alias-border-l1,#9ca3af)}
@@ -496,36 +476,55 @@ window.__ModuleLoader__.load({
       const PROTOCOLS = ['auto', 'openai', 'dashscope', 'tokenplan', 'ark', 'arkplan', 'openspeech'];
 
       /**
-       * One-click fill values per protocol and provider, mirroring the defaults in
-       * `src/providers.js` (DEFAULT_TTS_PATH / DEFAULT_IMAGE_PATH) plus the provider
-       * catalogues that were probed live: Volcengine Ark / Agent Plan, Alibaba
-       * DashScope / Token Plan, and a plain OpenAI-compatible endpoint.
+       * Volcengine speech voices, shared by Ark, Agent Plan and openspeech — all three
+       * reach the same voice catalogue, and the id is what `req_params.speaker` carries.
        */
+      const VOLC_VOICES = [
+        { value: 'zh_female_gaolengyujie_uranus_bigtts', label: '高冷御姐·女' },
+        { value: 'zh_female_shuangkuaisisi_uranus_bigtts', label: '爽快思思·女' },
+        { value: 'zh_female_tianmeixiaoyuan_uranus_bigtts', label: '甜美小源·女' },
+        { value: 'zh_female_wanwanxiaohe_uranus_bigtts', label: '湾湾小何·女' },
+        { value: 'zh_female_vv_uranus_bigtts', label: 'Vv·女' },
+        { value: 'zh_female_xiaohe_uranus_bigtts', label: '小何·女' },
+        { value: 'zh_female_cancan_uranus_bigtts', label: '灿灿·女' },
+        { value: 'zh_female_qingxinnvsheng_uranus_bigtts', label: '清新女声·女' },
+        { value: 'zh_male_lengyue_uranus_bigtts', label: '冷月·男' },
+        { value: 'zh_male_yangguangqingnian_uranus_bigtts', label: '阳光青年·男' },
+        { value: 'zh_male_jingqiangkanye_uranus_bigtts', label: '京腔侃爷·男' },
+        { value: 'zh_male_naiqimengwa_uranus_bigtts', label: '奶气萌娃·童' },
+      ];
+
+      /** Endpoint and format presets per protocol, mirroring `DEFAULT_TTS_PATH` / `DEFAULT_IMAGE_PATH` in src/providers.js. */
+      /** The value each protocol uses when the field is left blank, matching src/providers.js. */
       const SUGGEST = {
         tts: {
-          openai: { baseURL: 'https://api.openai.com/v1', model: 'gpt-4o-mini-tts', voice: 'alloy', format: 'mp3' },
-          dashscope: { baseURL: 'https://dashscope.aliyuncs.com', model: 'qwen-audio-3.0-tts-plus', voice: 'Cherry', format: 'mp3', language: 'Chinese' },
-          tokenplan: { baseURL: 'https://dashscope.aliyuncs.com', model: 'qwen-audio-3.0-tts-plus', voice: 'Cherry', format: 'mp3' },
-          ark: { baseURL: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-seed-tts-2.0', voice: 'zh_female_gaolengyujie_uranus_bigtts', format: 'mp3' },
-          arkplan: { baseURL: 'https://ark.cn-beijing.volces.com/api/plan/v3', model: 'doubao-seed-tts-2.0', voice: 'zh_female_gaolengyujie_uranus_bigtts', format: 'mp3', resourceId: 'seed-tts-2.0' },
-          openspeech: { baseURL: 'https://openspeech.bytedance.com', model: 'doubao-seed-tts-2.0', voice: 'zh_female_gaolengyujie_uranus_bigtts', format: 'mp3' },
+          openai: { baseURL: 'https://api.openai.com/v1', format: 'mp3', model: 'gpt-4o-mini-tts', voice: 'alloy' },
+          dashscope: { baseURL: 'https://dashscope.aliyuncs.com', format: 'mp3', language: 'Chinese', model: 'qwen-audio-3.0-tts-plus', voice: 'Cherry' },
+          tokenplan: { baseURL: 'https://dashscope.aliyuncs.com', format: 'mp3', model: 'qwen-audio-3.0-tts-plus', voice: 'Cherry' },
+          ark: { baseURL: 'https://ark.cn-beijing.volces.com/api/v3', format: 'mp3', model: 'doubao-seed-tts-2.0', voice: 'zh_female_gaolengyujie_uranus_bigtts' },
+          arkplan: { baseURL: 'https://ark.cn-beijing.volces.com/api/plan/v3', format: 'mp3', resourceId: 'seed-tts-2.0', model: 'doubao-seed-tts-2.0', voice: 'zh_female_gaolengyujie_uranus_bigtts' },
+          openspeech: { baseURL: 'https://openspeech.bytedance.com', format: 'mp3', model: 'doubao-seed-tts-2.0', voice: 'zh_female_gaolengyujie_uranus_bigtts' },
         },
         image: {
-          openai: { baseURL: 'https://api.openai.com/v1', model: 'gpt-image-1', size: '1024x1024' },
-          dashscope: { baseURL: 'https://dashscope.aliyuncs.com', model: 'qwen-image-3.0-pro', size: '1024x1024' },
-          tokenplan: { baseURL: 'https://dashscope.aliyuncs.com', model: 'qwen-image-3.0-pro', size: '1024x1024' },
-          ark: { baseURL: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-seedream-5.0-pro', size: '2048x2048' },
-          arkplan: { baseURL: 'https://ark.cn-beijing.volces.com/api/plan/v3', model: 'doubao-seedream-5.0-pro', size: '2048x2048' },
-          openspeech: { baseURL: 'https://openspeech.bytedance.com', model: '', size: '1024x1024' },
+          openai: { baseURL: 'https://api.openai.com/v1', size: '1024x1024', model: 'gpt-image-1' },
+          dashscope: { baseURL: 'https://dashscope.aliyuncs.com', size: '1024x1024', model: 'qwen-image-3.0-pro' },
+          tokenplan: { baseURL: 'https://dashscope.aliyuncs.com', size: '1024x1024', model: 'qwen-image-3.0-pro' },
+          ark: { baseURL: 'https://ark.cn-beijing.volces.com/api/v3', size: '2048x2048', model: 'doubao-seedream-5.0-pro' },
+          arkplan: { baseURL: 'https://ark.cn-beijing.volces.com/api/plan/v3', size: '2048x2048', model: 'doubao-seedream-5.0-pro' },
+          openspeech: { baseURL: 'https://openspeech.bytedance.com', size: '1024x1024', model: '' },
         },
       };
 
-      /** Faster presets that only exist for one protocol and one provider. */
-      const MODEL_PRESETS = {
+      /**
+       * Every model and voice the providers document. A field that has a list renders as a
+       * `<select>`; anything the user typed that is not listed stays visible as one more
+       * option, so a custom id is never silently swapped for a preset.
+       */
+      const MODELS = {
         tts: {
           openai: ['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd'],
           dashscope: ['qwen-audio-3.0-tts-plus', 'qwen-tts'],
-          tokenplan: ['qwen-audio-3.0-tts-plus'],
+          tokenplan: ['qwen-audio-3.0-tts-plus', 'qwen-tts'],
           ark: ['doubao-seed-tts-2.0'],
           arkplan: ['doubao-seed-tts-2.0'],
           openspeech: ['doubao-seed-tts-2.0'],
@@ -533,28 +532,76 @@ window.__ModuleLoader__.load({
         image: {
           openai: ['gpt-image-1', 'dall-e-3'],
           dashscope: ['qwen-image-3.0-pro', 'wan2.7-image-pro', 'wan2.7-image'],
-          tokenplan: ['qwen-image-3.0-pro', 'wan2.7-image-pro'],
+          tokenplan: ['qwen-image-3.0-pro', 'wan2.7-image-pro', 'wan2.7-image'],
           ark: ['doubao-seedream-5.0-pro', 'doubao-seedream-5.0-flash'],
           arkplan: ['doubao-seedream-5.0-pro', 'doubao-seedream-5.0-flash'],
           openspeech: [],
         },
       };
 
-      /** Placeholders that tell the user what belongs in an empty box. */
-      const placeholders = (provider, protocol, key) => {
-        const suggest = SUGGEST[provider]?.[protocol]?.[key];
-        if (suggest) return suggest;
-        const byProtocol = {
-          baseURL: 'https://api.example.com/v1',
-          path: protocol === 'auto' ? '留空即可' : '留空 = 用协议默认端点',
-          model: '服务商文档里的模型名',
-          voice: '服务商文档里的音色名',
-          format: 'mp3',
-          language: '',
-          size: '1024x1024',
-          extraBody: '{ "seed": 42 }',
-        };
-        return byProtocol[key] ?? '';
+      const VOICES = {
+        tts: {
+          openai: [
+            { value: 'alloy', label: 'alloy（中性）' },
+            { value: 'ash', label: 'ash（低沉）' },
+            { value: 'ballad', label: 'ballad（叙事）' },
+            { value: 'coral', label: 'coral（明亮）' },
+            { value: 'echo', label: 'echo（男声）' },
+            { value: 'fable', label: 'fable（英式）' },
+            { value: 'nova', label: 'nova（女声）' },
+            { value: 'onyx', label: 'onyx（浑厚男声）' },
+            { value: 'sage', label: 'sage（柔和）' },
+            { value: 'shimmer', label: 'shimmer（轻柔女声）' },
+          ],
+          dashscope: [
+            { value: 'Cherry', label: 'Cherry（芊悦·女）' },
+            { value: 'Serena', label: 'Serena（苏瑶·女）' },
+            { value: 'Ethan', label: 'Ethan（晨煦·男）' },
+            { value: 'Chelsie', label: 'Chelsie（千雪·女）' },
+            { value: 'Dylan', label: 'Dylan（晓东·男·京腔）' },
+            { value: 'Jada', label: 'Jada（阿珍·女·吴语）' },
+            { value: 'Sunny', label: 'Sunny（晴儿·女·四川话）' },
+            { value: 'Nofish', label: 'Nofish（不吃鱼·男）' },
+          ],
+          tokenplan: [
+            { value: 'Cherry', label: 'Cherry（芊悦·女）' },
+            { value: 'Serena', label: 'Serena（苏瑶·女）' },
+            { value: 'Ethan', label: 'Ethan（晨煦·男）' },
+            { value: 'Chelsie', label: 'Chelsie（千雪·女）' },
+            { value: 'Dylan', label: 'Dylan（晓东·男·京腔）' },
+            { value: 'Jada', label: 'Jada（阿珍·女·吴语）' },
+            { value: 'Sunny', label: 'Sunny（晴儿·女·四川话）' },
+            { value: 'Nofish', label: 'Nofish（不吃鱼·男）' },
+          ],
+          ark: VOLC_VOICES,
+          arkplan: VOLC_VOICES,
+          openspeech: VOLC_VOICES,
+        },
+      };
+
+      const SIZES = {
+        image: {
+          openai: ['1024x1024', '1024x1536', '1536x1024', 'auto'],
+          dashscope: ['1024x1024', '1328x1328', '1664x928', '928x1664'],
+          tokenplan: ['1024x1024', '1328x1328', '1664x928', '928x1664'],
+          ark: ['2048x2048', '2048x1152', '1152x2048', '1024x1024'],
+          arkplan: ['2048x2048', '2048x1152', '1152x2048', '1024x1024'],
+          openspeech: ['1024x1024'],
+        },
+      };
+
+      /** A `<select>` whose list is the provider's documented values plus whatever is stored. */
+      const choiceField = (value, options, onChange) => {
+        const current = String(value ?? '');
+        const normalised = options.map((option) => (typeof option === 'string' ? { value: option, label: option } : option));
+        const known = normalised.some((option) => option.value === current);
+        const extra = current !== '' && !known ? [{ value: current, label: `${current}（${t('customValue')}）` }] : [];
+        return h(
+          'select',
+          { className: 'dshrs-select', value: current, onChange: (event) => onChange(event.target.value) },
+          ...normalised.map((option) => h('option', { value: option.value, key: option.value }, option.label)),
+          ...extra.map((option) => h('option', { value: option.value, key: '__custom' }, option.label)),
+        );
       };
 
       const providerCard = (provider, fields, titleKey) => {
@@ -563,20 +610,6 @@ window.__ModuleLoader__.load({
         const test = tests[provider];
         const protocolHint = config.protocol && config.protocol !== 'auto' ? t(`protoHint_${config.protocol}`) : t('protoHint_auto');
         const effective = PROTOCOLS.includes(config.protocol) ? config.protocol : 'auto';
-        const suggestion = SUGGEST[provider]?.[effective];
-        /** Fill every suggested value that is still empty — never overwrites typed input. */
-        const fillSuggested = () => {
-          if (!suggestion) return;
-          setDraft((current) => {
-            const existing = current.providers[provider] ?? {};
-            const next = { ...existing };
-            for (const [key, value] of Object.entries(suggestion)) {
-              if (String(next[key] ?? '').trim() === '') next[key] = String(value);
-            }
-            return { ...current, providers: { ...current.providers, [provider]: next } };
-          });
-          setMessage('');
-        };
         return h(
           'div',
           { className: 'dshrs-card' },
@@ -585,9 +618,6 @@ window.__ModuleLoader__.load({
             { className: 'dshrs-inline' },
             h('div', { className: 'dshrs-card-title' }, t(titleKey)),
             h('span', { className: `dshrs-badge${status ? ' dshrs-badge-on' : ''}` }, status ? t('keySet') : t('keyUnset')),
-            suggestion
-              ? h('button', { className: 'dshrs-btn dshrs-btn-sm', type: 'button', onClick: fillSuggested }, t('suggestAll'))
-              : null,
           ),
           row(
             t('protocol'),
@@ -606,58 +636,30 @@ window.__ModuleLoader__.load({
           ...fields.map((field) => {
             const key = field.key;
             const value = config[key] ?? '';
-            const suggest = SUGGEST[provider]?.[effective] ?? {};
-            // `path` is derived per protocol, so it never gets a suggested-value chip.
-            const suggested = key !== 'path' && suggest[key] !== undefined && suggest[key] !== '' ? String(suggest[key]) : '';
-            const presets = (MODEL_PRESETS[provider]?.[effective] ?? []).filter((item) => item !== value);
+            const options =
+              key === 'model'
+                ? (MODELS[provider]?.[effective] ?? [])
+                : key === 'voice'
+                  ? (VOICES[provider]?.[effective] ?? [])
+                  : key === 'size'
+                    ? (SIZES[provider]?.[effective] ?? [])
+                    : null;
+            const suggestion = SUGGEST[provider]?.[effective]?.[key];
             const control =
-              field.type === 'area'
-                ? h('textarea', {
-                    className: 'dshrs-area',
-                    value,
-                    placeholder: placeholders(provider, effective, key),
-                    onChange: setProvider(provider, key),
-                  })
-                : fieldInput(value, setProvider(provider, key), {
-                    placeholder: placeholders(provider, effective, key),
-                    ...(field.type === 'number' ? { type: 'number' } : {}),
-                  });
-            const chips = [];
-            if (suggested) {
-              chips.push(
-                h(
-                  'button',
-                  {
-                    className: 'dshrs-chip',
-                    key: `fill-${key}`,
-                    type: 'button',
-                    onClick: () => setProvider(provider, key)(suggested),
-                  },
-                  `${t('suggestFill')} ${suggested}`,
-                ),
-              );
-            }
-            for (const preset of presets) {
-              chips.push(
-                h(
-                  'button',
-                  { className: 'dshrs-chip', key: `preset-${preset}`, type: 'button', onClick: () => setProvider(provider, key)(preset) },
-                  preset,
-                ),
-              );
-            }
-            return row(
-              field.label,
-              field.hint,
-              chips.length > 0
-                ? h(
-                    'div',
-                    { className: 'dshrs-row', style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
-                    control,
-                    h('div', { className: 'dshrs-chips' }, ...chips),
-                  )
-                : control,
-            );
+              options && options.length > 0
+                ? choiceField(value, options, setProvider(provider, key))
+                : field.type === 'area'
+                  ? h('textarea', {
+                      className: 'dshrs-area',
+                      value,
+                      placeholder: suggestion && key !== 'extraBody' ? String(suggestion) : '',
+                      onChange: setProvider(provider, key),
+                    })
+                  : fieldInput(value, setProvider(provider, key), {
+                      placeholder: suggestion ? String(suggestion) : '',
+                      ...(field.type === 'number' ? { type: 'number' } : {}),
+                    });
+            return row(field.label, field.hint, control);
           }),
           row(
             t('apiKey'),
@@ -816,11 +818,11 @@ window.__ModuleLoader__.load({
           [
             { key: 'baseURL', label: t('baseURL') },
             { key: 'path', label: t('path'), hint: t('pathHint') },
-            { key: 'model', label: t('model'), hint: t('modelHint') },
-            { key: 'voice', label: t('voice'), hint: t('voiceHint') },
+            { key: 'model', label: t('model') },
+            { key: 'voice', label: t('voice') },
             { key: 'format', label: t('format') },
             { key: 'language', label: t('language'), hint: t('languageHint') },
-            { key: 'resourceId', label: t('resourceId'), hint: t('resourceIdHint') },
+            { key: 'resourceId', label: t('resourceId') },
             { key: 'extraBody', label: t('extraBody'), hint: t('extraBodyHint'), type: 'area' },
           ],
           'groupTts',
@@ -830,8 +832,8 @@ window.__ModuleLoader__.load({
           [
             { key: 'baseURL', label: t('baseURL') },
             { key: 'path', label: t('path'), hint: t('pathHint') },
-            { key: 'model', label: t('model'), hint: t('modelHint') },
-            { key: 'size', label: t('size'), hint: t('sizeHint') },
+            { key: 'model', label: t('model') },
+            { key: 'size', label: t('size') },
             { key: 'extraBody', label: t('extraBody'), hint: t('extraBodyHint'), type: 'area' },
           ],
           'groupImage',
@@ -855,22 +857,6 @@ window.__ModuleLoader__.load({
                 ),
               )
             : null,
-          h('div', { className: 'dshrs-hint' }, t('projects')),
-          projects.length === 0
-            ? h('div', { className: 'dshrs-hint' }, t('noProjects'))
-            : h(
-                'div',
-                { className: 'dshrs-list' },
-                ...projects.map((project) =>
-                  h(
-                    'div',
-                    { key: project.path },
-                    h('strong', null, project.name),
-                    ` · ${project.remotion ?? '?'} · ${project.installed ? t('installed') : t('notInstalled')}`,
-                    h('div', { className: 'dshrs-mono' }, project.path),
-                  ),
-                ),
-              ),
           h('div', { className: 'dshrs-mono' }, `${t('settingsFile')}: ${snapshot.paths?.settingsFile ?? ''}`),
           h('div', { className: 'dshrs-mono' }, `${t('runtime')}: Node ${snapshot.runtime?.node ?? '?'} · ${snapshot.runtime?.platform ?? ''}`),
           // Save controls close out this card in normal flow: the settings

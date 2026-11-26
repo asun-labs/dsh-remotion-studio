@@ -13,7 +13,7 @@ import { BRIDGE_PATH, isBridgeToken, isLocalOrigin } from './bridge.js';
 import { generateImage, synthesizeSpeech, PROTOCOL_LABEL } from './providers.js';
 import { doctor, listProjects, projectPath } from './runner.js';
 import { sameOrigin } from './settings.js';
-import { startStudio, studioFor, studioReady, stopStudio, waitUntilReady } from './studio.js';
+import { openInBrowser, startStudio, studioFor, studioReady, stopStudio, waitUntilReady } from './studio.js';
 
 export const API_PATH = '/dsh-remotion/api';
 
@@ -206,7 +206,10 @@ export function registerApi(ctx, { store, logger }) {
           const secrets = { tts: await store.readSecret('tts'), image: await store.readSecret('image') };
           const result = await startStudio({ dir, settings, secrets, port: payload.port });
           const ready = await waitUntilReady(result.url, { timeoutMs: 120000 });
-          send(res, 200, { ok: true, url: result.url, port: result.port, started: result.started, ready, autoOpen: Boolean(result.autoOpen) });
+          // The single place the browser gets opened for a start request.
+          const autoOpen = result.started && result.autoOpen && ready;
+          if (autoOpen) openInBrowser(result.url);
+          send(res, 200, { ok: true, url: result.url, port: result.port, started: result.started, ready, autoOpen });
           return;
         }
         case 'studioStatus': {

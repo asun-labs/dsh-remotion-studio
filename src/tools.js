@@ -403,7 +403,7 @@ export function registerTools(ctx, { store, logger }) {
           const dir = resolveProject(settings, args.project);
           const secrets = await secretsOf(store);
           const result = await startStudio({ dir, settings, secrets, port: args.port });
-          const opening = result.started && result.autoOpen ? '，已自动用浏览器打开（就绪后）' : '';
+          const opening = result.started && result.autoOpen ? '（就绪后会自动在浏览器打开）' : '';
           return {
             ok: true,
             summary: result.started
