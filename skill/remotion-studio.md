@@ -132,11 +132,17 @@ schema；外部 MCP server 的工具也走这张表。
    写进配置文件；如果换了 dashscope/ark/openspeech 却忘了清空路径，会打到错误的地址。
 9. **Agent Plan 两处静默陷阱**：① baseURL 必须是 `/api/plan/v3`，写成 `/api/v3` 不报错，
    但请求按按量付费结算；② 配音走的是 `openspeech.bytedance.com` 而不是方舟域名，
-   且必须带 `x-api-resource-id: seed-tts-2.0`，缺了才报 `403 code 45000030`。
+   且必须带 `x-api-resource-id: seed-tts-2.0`（**填模型名 `doubao-seed-tts-2.0` 会报
+   `requested resource not granted`**），缺了才报 `403 code 45000030`。
    报 `Forbidden.AgentPlanDeductNotEnabled` 是控制台「Agent Plan 抵扣」没开，去控制台打开即可。
-10. **改插件源码后要重载**：`plugin_manager remove_bundle` → `install_bundle`，
+   另外 Agent Plan 生图要求面积 ≥ 921600 px：`1024x1024` 被拒，用 `2048x2048` 或 `2K`。
+10. **火山语音返回的是 NDJSON 流（多行 base64 块）**，不是单个 JSON：每行
+    `{"code":0,"data":"<base64 块>"}`，末行 `{"code":20000000,"message":"OK","data":null}`。
+    文本越长行数越多（短句 2 行、长句十几行）。整段 `JSON.parse` 会失败，必须逐行解析并把
+    `data` 拼起来再 base64 解码。插件已处理，自己手写调用时注意。
+11. **改插件源码后要重载**：`plugin_manager remove_bundle` → `install_bundle`，
    否则旧 Host 模块继续跑（`already-installed` 表示没重载）。
-11. **不要动 `node_modules`**：那等于改 Remotion 源码，升级即丢，也破坏「零修改」承诺。
+12. **不要动 `node_modules`**：那等于改 Remotion 源码，升级即丢，也破坏「零修改」承诺。
    需要额外能力就用 CLI 透传或 `remotion.config.ts` 的官方 API。
 
 ## 官方文档
