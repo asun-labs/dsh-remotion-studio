@@ -58,11 +58,13 @@ window.__ModuleLoader__.load({
         proto_auto: '自动识别（推荐）',
         proto_openai: 'OpenAI 兼容',
         proto_dashscope: '阿里云百炼 DashScope',
+        proto_tokenplan: '阿里云 Token Plan（订阅套餐）',
         proto_ark: '火山方舟 Ark',
         proto_openspeech: '火山语音 openspeech',
         protoHint_auto: '依次尝试下面的几种协议，哪种返回真实音频/图片就用哪种；最省事。',
         protoHint_openai: 'POST 到 baseURL+path，请求体 {input|prompt, model, voice|size}，返回音频字节或 data[0].b64_json/url。适用于 OpenAI 官方、各类聚合站、本地 vLLM/Ollama。',
         protoHint_dashscope: '阿里云百炼：接口路径默认 /api/v1/services/aigc/multimodal-generation/generation（TTS 也可用 /api/v1/services/audio/tts/SpeechSynthesizer），返回里是音频/图片 URL，插件会自动下载。',
+        protoHint_tokenplan: '阿里云 Token Plan 订阅套餐：baseURL 填 https://token-plan.cn-beijing.maas.aliyuncs.com（不要带 /apps/anthropic），TTS 走 /api/v1/services/audio/tts/SpeechSynthesizer、生图走 /api/v1/services/aigc/multimodal-generation/generation；音色要用套餐音色名（如 longanhuan_v3.6）。',
         protoHint_ark: '火山方舟：生图走 /images/generations 返回 data[0].url（有效期约 24 小时）；必须用 Agent Plan 专属 Key，baseURL 通常含 /api/plan/v3。',
         protoHint_openspeech: '火山语音：POST /api/v3/tts/unidirectional，鉴权头 x-api-key，请求体 {req_params:{text,speaker,audio_params}}，返回 base64 音频分块。',
         model: '模型',
@@ -150,11 +152,13 @@ window.__ModuleLoader__.load({
         proto_auto: 'Auto-detect (recommended)',
         proto_openai: 'OpenAI-compatible',
         proto_dashscope: 'Alibaba DashScope',
+        proto_tokenplan: 'Alibaba Token Plan (subscription)',
         proto_ark: 'Volcengine Ark',
         proto_openspeech: 'Volcengine openspeech',
         protoHint_auto: 'Tries the protocols below until one returns real audio or image data — the least fiddly choice.',
         protoHint_openai: 'POST baseURL+path with {input|prompt, model, voice|size}; expects audio bytes or data[0].b64_json/url. Works with OpenAI, aggregators and local vLLM/Ollama.',
         protoHint_dashscope: 'Alibaba Cloud Bailian: default path /api/v1/services/aigc/multimodal-generation/generation (TTS may also use /api/v1/services/audio/tts/SpeechSynthesizer). Answers with a URL, which the plugin downloads for you.',
+        protoHint_tokenplan: 'Alibaba Token Plan subscription: base URL https://token-plan.cn-beijing.maas.aliyuncs.com (no /apps/anthropic); TTS uses /api/v1/services/audio/tts/SpeechSynthesizer, images use /api/v1/services/aigc/multimodal-generation/generation. Voices must be plan voices such as longanhuan_v3.6.',
         protoHint_ark: 'Volcengine Ark: images via /images/generations returning data[0].url (valid ~24h). Requires an Agent Plan key; the base URL usually contains /api/plan/v3.',
         protoHint_openspeech: 'Volcengine speech: POST /api/v3/tts/unidirectional with x-api-key and {req_params:{text,speaker,audio_params}}; answers with base64 audio chunks.',
         model: 'Model',
@@ -460,7 +464,7 @@ window.__ModuleLoader__.load({
         }
       };
 
-      const PROTOCOLS = ['auto', 'openai', 'dashscope', 'ark', 'openspeech'];
+      const PROTOCOLS = ['auto', 'openai', 'dashscope', 'tokenplan', 'ark', 'openspeech'];
 
       const providerCard = (provider, fields, titleKey) => {
         const config = draft.providers[provider] ?? {};

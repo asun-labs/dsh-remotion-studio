@@ -10,6 +10,10 @@
  *               或 /api/v1/services/audio/tts/SpeechSynthesizer → URL 或 base64
  *   ark         火山方舟: /images/generations、/contents/generations/tasks → {data[0].url}
  *   openspeech  火山语音: /api/v3/tts/unidirectional → {data:"<base64>"} 分块音频
+ *   tokenplan   阿里云 Token Plan（sk-sp- 订阅套餐）: 图像
+ *               /api/v1/services/aigc/multimodal-generation/generation，
+ *               语音 /api/v1/services/audio/tts/SpeechSynthesizer → URL
+ *               baseURL 建议 https://token-plan.cn-beijing.maas.aliyuncs.com
  *   auto        逐个试上面的协议，直到某个成功
  *
  * Nothing here hard-codes a key or a model: everything comes from settings.
@@ -17,12 +21,13 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 
-export const PROTOCOLS = ['auto', 'openai', 'dashscope', 'ark', 'openspeech'];
+export const PROTOCOLS = ['auto', 'openai', 'dashscope', 'tokenplan', 'ark', 'openspeech'];
 
 const PROTOCOL_LABEL = {
   auto: '自动识别',
   openai: 'OpenAI 兼容',
   dashscope: '阿里云百炼（DashScope）',
+  tokenplan: '阿里云 Token Plan（订阅套餐）',
   ark: '火山方舟（Ark）',
   openspeech: '火山语音（openspeech）',
 };
@@ -31,6 +36,7 @@ const DEFAULT_TTS_PATH = {
   auto: '/audio/speech',
   openai: '/audio/speech',
   dashscope: '/api/v1/services/aigc/multimodal-generation/generation',
+  tokenplan: '/api/v1/services/audio/tts/SpeechSynthesizer',
   ark: '/api/v3/tts/unidirectional',
   openspeech: '/api/v3/tts/unidirectional',
 };
@@ -39,18 +45,20 @@ const DEFAULT_IMAGE_PATH = {
   auto: '/images/generations',
   openai: '/images/generations',
   dashscope: '/api/v1/services/aigc/multimodal-generation/generation',
+  tokenplan: '/api/v1/services/aigc/multimodal-generation/generation',
   ark: '/images/generations',
   openspeech: '/images/generations',
 };
 
 /** Order in which `auto` probes protocols; cheap/likely first. */
-const TTS_ORDER = ['openai', 'openspeech', 'dashscope', 'ark'];
-const IMAGE_ORDER = ['openai', 'ark', 'dashscope'];
+const TTS_ORDER = ['openai', 'openspeech', 'dashscope', 'tokenplan', 'ark'];
+const IMAGE_ORDER = ['openai', 'ark', 'dashscope', 'tokenplan'];
 
 export function normalizeProtocol(value) {
   const key = String(value ?? '').trim().toLowerCase();
   if (key === 'volcengine' || key === 'volc' || key === 'bytedance') return 'ark';
   if (key === 'aliyun' || key === 'bailian' || key === 'qwen') return 'dashscope';
+  if (key === 'token-plan' || key === 'tokenplan' || key === 'sk-sp') return 'tokenplan';
   if (key === 'doubao' || key === 'seed-tts' || key === 'seedtts') return 'openspeech';
   return PROTOCOLS.includes(key) ? key : 'auto';
 }
@@ -260,6 +268,23 @@ function ttsRequest(protocol, { provider, text, model, voice, format, extraBody 
         auth: 'bearer',
       };
     }
+    case 'tokenplan': {
+      // Token Plan 语音合成: input{ text, voice, format, sample_rate } → output.audio.url
+      return {
+        body: {
+          model: modelId,
+          input: {
+            text,
+            ...(voiceId ? { voice: voiceId } : {}),
+            format: audioFormat,
+            sample_rate: Number(provider.sampleRate) > 0 ? Number(provider.sampleRate) : 22050,
+            ...(provider.language ? { language_type: String(provider.language) } : {}),
+          },
+          ...extraBody,
+        },
+        auth: 'bearer',
+      };
+    }
     case 'ark':
     case 'openspeech': {
       // 火山语音: req_params{ text, speaker, audio_params{format,sample_rate} }
@@ -296,12 +321,13 @@ function ttsRequest(protocol, { provider, text, model, voice, format, extraBody 
   }
 }
 
-async function ttsResponse(protocol, result, { apiKey, timeoutMs }) {
+async function ttsResponse(protocol, result, { apiKey, timeoutMs, format }) {
+  const fallbackExt = String(format ?? '').toLowerCase() || 'mp3';
   if (result.bytes) {
     if (!isAudioBytes(result.bytes)) {
       throw new Error('返回的二进制不是音频（可能是错误页或 JSON），请检查 baseURL 与 path');
     }
-    return { bytes: result.bytes, ext: audioExtensionFrom(result.contentType, 'mp3') };
+    return { bytes: result.bytes, ext: audioExtensionFrom(result.contentType, fallbackExt) };
   }
   const json = result.json ?? {};
   const direct = json.data;
@@ -313,22 +339,24 @@ async function ttsResponse(protocol, result, { apiKey, timeoutMs }) {
   const explicit = [json.audio, json.audio_base64, json.audioContent, json.data?.audio];
   for (const candidate of explicit) {
     const base64 = toBase64(candidate);
-    if (typeof base64 === 'string' && base64.length > 64) return { bytes: Buffer.from(base64, 'base64'), ext: 'mp3' };
+    if (typeof base64 === 'string' && base64.length > 64) return { bytes: Buffer.from(base64, 'base64'), ext: fallbackExt };
   }
   const remote = json.audio?.url ?? json.url ?? findUrl(json, AUDIO_EXT) ?? findUrl(json, AUDIO_EXT, true);
   if (remote) {
     const bytes = await fetchBytes(remote, undefined, timeoutMs);
     if (!isAudioBytes(bytes)) throw new Error(`音频地址返回的不是音频：${remote}`);
-    return { bytes, ext: audioExtensionFrom('', 'mp3') };
+    return { bytes, ext: audioExtensionFrom('', fallbackExt) };
   }
   const base64 = findBase64(json, 128);
-  if (base64) return { bytes: Buffer.from(toBase64(base64), 'base64'), ext: 'mp3' };
+  if (base64) return { bytes: Buffer.from(toBase64(base64), 'base64'), ext: fallbackExt };
   throw new Error(`响应里没有音频数据：${JSON.stringify(json).slice(0, 400)}`);
 }
 
 function readError(error) {
-  const message = String(error?.message ?? error);
-  // Network-level "wrong protocol" failures are the expected case for `auto`.
+  let message = String(error?.message ?? error);
+  // The endpoint exists but the router rejects it (e.g. `/apps/anthropic` prepended
+  // to a native service path). Say so instead of echoing the portal URL.
+  if (/url error/i.test(message)) message = `接口路径不被该地址接受（url error），baseURL 应填服务根地址：${message}`;
   return message.replace(/\s+/g, ' ').slice(0, 300);
 }
 
@@ -362,7 +390,11 @@ export async function synthesizeSpeech({ provider, apiKey, text, outFile, voice,
         auth: request.auth,
         headers: request.headers,
       });
-      const { bytes, ext } = await ttsResponse(protocol, result, { apiKey, timeoutMs });
+      const { bytes, ext } = await ttsResponse(protocol, result, {
+        apiKey,
+        timeoutMs,
+        format: String(format ?? provider.format ?? 'mp3'),
+      });
       const target = ensureExtension(outFile, ext);
       mkdirSync(dirname(target), { recursive: true });
       writeFileSync(target, bytes);
@@ -385,12 +417,14 @@ function imageRequest(protocol, { provider, prompt, size, model, extraBody }) {
   const imageSize = String(size ?? provider.size ?? '');
   switch (protocol) {
     case 'dashscope':
-      // Qwen-Image: input.messages[] with a text content part.
+    case 'tokenplan':
+      // Qwen-Image: input.messages[] with a text content part (Token Plan 同形状)。
+      // Token Plan 的尺寸写法是 1024*1024，这里顺手把 1024x1024 归一化。
       return {
         body: {
           model: modelId,
           input: { messages: [{ role: 'user', content: [{ text: prompt }] }] },
-          parameters: { ...(imageSize ? { size: imageSize } : {}), ...extraBody },
+          parameters: { ...(imageSize ? { size: imageSize.replace(/[x×*]/i, '*') } : {}), ...extraBody },
         },
         auth: 'bearer',
       };
