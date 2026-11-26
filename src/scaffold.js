@@ -276,6 +276,7 @@ const AUDIO_DEFAULT_PATH: Record<string, string> = {
   dashscope: '/api/v1/services/aigc/multimodal-generation/generation',
   tokenplan: '/api/v1/services/audio/tts/SpeechSynthesizer',
   ark: '/api/v3/tts/unidirectional',
+  arkplan: '/api/v3/plan/tts/unidirectional',
   openspeech: '/api/v3/tts/unidirectional',
 };
 
@@ -284,7 +285,11 @@ const IMAGE_DEFAULT_PATH: Record<string, string> = {
   ark: '/images/generations',
   dashscope: '/api/v1/services/aigc/multimodal-generation/generation',
   tokenplan: '/api/v1/services/aigc/multimodal-generation/generation',
+  arkplan: '/api/plan/v3/images/generations',
 };
+
+/** Agent Plan speech is served by openspeech, a different host from the Ark API. */
+const ARKPLAN_TTS_HOST = 'https://openspeech.bytedance.com';
 
 /**
  * Token Plan's native services live at the host root; a compatible-mode suffix
@@ -297,7 +302,10 @@ function nativeBase(baseURL: string): string {
 function protocolOf(config: ProviderConfig): string {
   const raw = String(config.protocol ?? '').toLowerCase();
   if (raw && raw !== 'auto') return raw;
-  if (/token-plan\./i.test(String(config.baseURL ?? ''))) return 'tokenplan';
+  const base = String(config.baseURL ?? '');
+  if (/token-plan\./i.test(base)) return 'tokenplan';
+  if (/\/api\/plan\b/i.test(base)) return 'arkplan';
+  if (/ark\.(cn-)?[a-z0-9-]*\.volces\.com/i.test(base)) return 'ark';
   return 'openai';
 }
 
@@ -391,7 +399,7 @@ export async function speak(
             },
             ...extra,
           }
-        : protocol === 'ark' || protocol === 'openspeech'
+        : protocol === 'ark' || protocol === 'openspeech' || protocol === 'arkplan'
           ? {
               ...(model ? { model } : {}),
               req_params: { text, ...(voice ? { speaker: voice } : {}), audio_params: { format } },
@@ -406,11 +414,19 @@ export async function speak(
             };
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (tts.apiKey) {
-    if (protocol === 'ark' || protocol === 'openspeech') headers['x-api-key'] = tts.apiKey;
+    if (protocol === 'ark' || protocol === 'openspeech' || protocol === 'arkplan') headers['x-api-key'] = tts.apiKey;
     else headers.authorization = 'Bearer ' + tts.apiKey;
   }
+  if (protocol === 'arkplan') {
+    // Agent Plan speech rejects requests without a resource id (403 code 45000030).
+    headers['x-api-resource-id'] = tts.resourceId || 'seed-tts-2.0';
+  }
   const endpoint = joinUrl(
-    protocol === 'tokenplan' ? nativeBase(tts.baseURL) : tts.baseURL,
+    protocol === 'arkplan'
+      ? ARKPLAN_TTS_HOST
+      : protocol === 'tokenplan'
+        ? nativeBase(tts.baseURL)
+        : tts.baseURL,
     tts.path || AUDIO_DEFAULT_PATH[protocol] || '/audio/speech',
   );
   const response = await fetch(endpoint, {
@@ -467,7 +483,7 @@ export async function generateImage(
           // Token Plan wants 1024*1024, not 1024x1024.
           parameters: { size: protocol === 'tokenplan' ? size.replace(/[x×*]/i, '*') : size, ...extra },
         }
-      : protocol === 'ark'
+      : protocol === 'ark' || protocol === 'arkplan'
         ? { ...(model ? { model } : {}), prompt, size, response_format: 'url', ...extra }
         : {
             prompt,

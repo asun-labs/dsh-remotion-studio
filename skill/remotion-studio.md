@@ -84,11 +84,12 @@ schema；外部 MCP server 的工具也走这张表。
 
 | 协议 | baseURL 示例 | 默认接口路径 | 说明 |
 | --- | --- | --- | --- |
-| `auto`（默认） | 任意 | 各协议默认端点 | 依次试 openai → openspeech → dashscope → ark，哪种返回真实音频/图片就用哪种 |
+| `auto`（默认） | 任意 | 各协议默认端点 | 依次试 openai → openspeech → dashscope → tokenplan → ark → arkplan，哪种返回真实音频/图片就用哪种 |
 | `openai` | `https://api.openai.com/v1` | `/audio/speech`、`/images/generations` | 各家聚合站、自建 vLLM/Ollama 也走这个 |
 | `dashscope` | `https://dashscope.aliyuncs.com` 或 `https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com` | `/api/v1/services/aigc/multimodal-generation/generation`（TTS 也可用 `/api/v1/services/audio/tts/SpeechSynthesizer`） | 阿里百炼，返回里是音频/图片 URL，插件自动下载；TTS 可另填 `language`（`Chinese`/`English`） |
 | `tokenplan` | `https://token-plan.cn-beijing.maas.aliyuncs.com`（带 `/compatible-mode/v1` 也可以，会自动折算到根地址；**不要**带 `/apps/anthropic`） | TTS `/api/v1/services/audio/tts/SpeechSynthesizer`、生图 `/api/v1/services/aigc/multimodal-generation/generation` | 阿里云 Token Plan 订阅套餐（`sk-sp-` Key）。音色必须用套餐音色名（如 `longanhuan_v3.6`）；生图尺寸写 `1024*1024`；`Cherry` 这类百炼音色会报 `[cosyvoice:]Engine error [411]` |
 | `ark` | `https://ark.cn-beijing.volces.com/api/plan/v3` | `/images/generations` | 火山方舟生图，`data[0].url` 约 24 小时有效；**必须用 Agent Plan 专属 Key**，baseURL 含 `/plan` |
+| `arkplan` | `https://ark.cn-beijing.volces.com` 或带 `/api/plan/v3` | 生图 `/api/plan/v3/images/generations`、TTS `/api/v3/plan/tts/unidirectional` | 火山方舟 Agent Plan 订阅套餐（`ark-` Key）。路径必须含 `/plan`，填 `/api/v3` 会静默走按量付费；生图模型 `doubao-seedream-5.0-pro` / `doubao-seedream-5.0-flash`；配音固定打 `openspeech.bytedance.com`，**必须带请求头 `x-api-resource-id: seed-tts-2.0`**（缺了报 `code 45000030 ... get resource id empty`），模型 `doubao-seed-tts-2.0`，音色如 `zh_female_gaolengyujie_uranus_bigtts`；报 `AgentPlanDeductNotEnabled` 是控制台没开抵扣开关，不是代码问题 |
 | `openspeech` | `https://openspeech.bytedance.com` | `/api/v3/tts/unidirectional` | 火山语音 TTS，鉴权头 `x-api-key`，`req_params{text,speaker,audio_params}`，返回 base64 音频 |
 
 接口路径留空 = 用该协议的默认端点；只有服务商文档给了特殊路径时才填。
@@ -129,9 +130,13 @@ schema；外部 MCP server 的工具也走这张表。
    `auto` 会列出每个协议各自的失败原因（`所有接口协议都没成功（A / B / C）`）。
 8. **接口路径留空才用协议默认端点**：老版本会把 `/audio/speech`、`/images/generations`
    写进配置文件；如果换了 dashscope/ark/openspeech 却忘了清空路径，会打到错误的地址。
-9. **改插件源码后要重载**：`plugin_manager remove_bundle` → `install_bundle`，
+9. **Agent Plan 两处静默陷阱**：① baseURL 必须是 `/api/plan/v3`，写成 `/api/v3` 不报错，
+   但请求按按量付费结算；② 配音走的是 `openspeech.bytedance.com` 而不是方舟域名，
+   且必须带 `x-api-resource-id: seed-tts-2.0`，缺了才报 `403 code 45000030`。
+   报 `Forbidden.AgentPlanDeductNotEnabled` 是控制台「Agent Plan 抵扣」没开，去控制台打开即可。
+10. **改插件源码后要重载**：`plugin_manager remove_bundle` → `install_bundle`，
    否则旧 Host 模块继续跑（`already-installed` 表示没重载）。
-10. **不要动 `node_modules`**：那等于改 Remotion 源码，升级即丢，也破坏「零修改」承诺。
+11. **不要动 `node_modules`**：那等于改 Remotion 源码，升级即丢，也破坏「零修改」承诺。
    需要额外能力就用 CLI 透传或 `remotion.config.ts` 的官方 API。
 
 ## 官方文档

@@ -21,7 +21,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 
-export const PROTOCOLS = ['auto', 'openai', 'dashscope', 'tokenplan', 'ark', 'openspeech'];
+export const PROTOCOLS = ['auto', 'openai', 'dashscope', 'tokenplan', 'ark', 'arkplan', 'openspeech'];
 
 const PROTOCOL_LABEL = {
   auto: '自动识别',
@@ -29,6 +29,7 @@ const PROTOCOL_LABEL = {
   dashscope: '阿里云百炼（DashScope）',
   tokenplan: '阿里云 Token Plan（订阅套餐）',
   ark: '火山方舟（Ark）',
+  arkplan: '火山方舟 Agent Plan（订阅套餐）',
   openspeech: '火山语音（openspeech）',
 };
 
@@ -37,6 +38,8 @@ const DEFAULT_TTS_PATH = {
   openai: '/audio/speech',
   dashscope: '/api/v1/services/aigc/multimodal-generation/generation',
   tokenplan: '/api/v1/services/audio/tts/SpeechSynthesizer',
+  // Agent Plan 语音只在 openspeech 端点，绝对地址，与 baseURL 无关。
+  arkplan: '/api/v3/plan/tts/unidirectional',
   ark: '/api/v3/tts/unidirectional',
   openspeech: '/api/v3/tts/unidirectional',
 };
@@ -47,16 +50,22 @@ const DEFAULT_IMAGE_PATH = {
   dashscope: '/api/v1/services/aigc/multimodal-generation/generation',
   tokenplan: '/api/v1/services/aigc/multimodal-generation/generation',
   ark: '/images/generations',
+  // Must contain `/plan`; the plain `/api/v3` base silently bills pay-as-you-go instead.
+  arkplan: '/api/plan/v3/images/generations',
   openspeech: '/images/generations',
 };
 
+/** Agent Plan speech is served by openspeech, a different host from the Ark API. */
+const ARKPLAN_TTS_HOST = 'https://openspeech.bytedance.com';
+
 /** Order in which `auto` probes protocols; cheap/likely first. */
-const TTS_ORDER = ['openai', 'openspeech', 'dashscope', 'tokenplan', 'ark'];
-const IMAGE_ORDER = ['openai', 'ark', 'dashscope', 'tokenplan'];
+const TTS_ORDER = ['openai', 'openspeech', 'dashscope', 'tokenplan', 'ark', 'arkplan'];
+const IMAGE_ORDER = ['openai', 'ark', 'dashscope', 'tokenplan', 'arkplan'];
 
 export function normalizeProtocol(value) {
   const key = String(value ?? '').trim().toLowerCase();
   if (key === 'volcengine' || key === 'volc' || key === 'bytedance') return 'ark';
+  if (key === 'agentplan' || key === 'agent-plan' || key === 'ark-plan' || key === 'arkplan') return 'arkplan';
   if (key === 'aliyun' || key === 'bailian' || key === 'qwen') return 'dashscope';
   if (key === 'token-plan' || key === 'tokenplan' || key === 'sk-sp') return 'tokenplan';
   if (key === 'doubao' || key === 'seed-tts' || key === 'seedtts') return 'openspeech';
@@ -81,11 +90,32 @@ export function defaultPath(kind, protocol) {
  *     so the prefix is dropped before the native path is appended;
  *  4. `baseURL` + the protocol's default path.
  */
+/** Ark Agent Plan base URLs end with the version segment, e.g. `.../api/plan/v3`. */
+function planBaseSuffix(baseURL) {
+  try {
+    const pathname = new URL(String(baseURL ?? '')).pathname.replace(/\/+$/, '');
+    return /\/api\/plan\/v\d+$/i.test(pathname);
+  } catch {
+    return false;
+  }
+}
+
 function endpointFor(kind, provider, protocol) {
   const manual = String(provider.path ?? '').trim();
-  if (manual) return joinUrl(provider.baseURL, manual);
+  if (manual) return joinUrl(protocol === 'arkplan' && kind === 'tts' ? ARKPLAN_TTS_HOST : provider.baseURL, manual);
+  // Agent Plan speech always lives on openspeech, whatever the address box says.
+  if (protocol === 'arkplan' && kind === 'tts') return joinUrlLoose(ARKPLAN_TTS_HOST, DEFAULT_TTS_PATH.arkplan);
   const typed = String(provider.baseURL ?? '').trim();
-  if (pathLikeBase(kind, typed)) return joinUrlLoose(typed);
+  // A pasted `/api/plan/v3` base already carries the prefix the default path repeats.
+  // Image: the base IS the endpoint (`/api/plan/v3/images/generations` is a suffix of
+  // nothing) — only the plain `/api/plan/v3` root makes no call on its own, so append
+  // the kind's last segment. TTS never reaches here (it is pinned to openspeech).
+  if (pathLikeBase(kind, typed)) {
+    if (planBaseSuffix(typed)) {
+      return joinUrlLoose(typed, kind === 'image' ? 'images/generations' : '');
+    }
+    return joinUrlLoose(typed);
+  }
   const fallback = defaultPath(kind, protocol);
   if (/\/compatible-mode/i.test(typed)) {
     const root = typed.replace(/\/compatible-mode(\/v\d+)?\/?$/i, '');
@@ -93,6 +123,9 @@ function endpointFor(kind, provider, protocol) {
     if (protocol === 'tokenplan') return joinUrlLoose(root, fallback);
     // Any other OpenAI-compatible service keeps its prefix: `/compatible-mode/v1` + `/audio/speech`.
     return joinUrlLoose(typed, fallback);
+  }
+  if (planBaseSuffix(typed) && fallback.startsWith('/api/plan/')) {
+    return joinUrlLoose(typed, fallback.replace(/^\/api\/plan\/v\d+/i, ''));
   }
   return joinUrl(typed, fallback);
 }
@@ -126,6 +159,8 @@ function pathLikeBase(kind, baseURL) {
   }
   if (!pathname) return false;
   if (/\/(audio\/speech|images\/generations|chat\/completions|SpeechSynthesizer|generation)$/i.test(pathname)) return true;
+  // Ark Agent Plan: people paste the whole `/api/plan/v3` base from the console.
+  if (/\/api\/plan\/v\d+\/?$/i.test(pathname)) return true;
   return false;
 }
 
@@ -156,6 +191,9 @@ function inferProtocol(kind, provider, requested) {
   // Token Plan: neither `/compatible-mode/v1` nor `/apps/anthropic` serves TTS or image
   // generation, so point every guess at the native service root.
   if (/token-plan\./i.test(base)) return 'tokenplan';
+  // Ark Agent Plan is the `/api/plan/...` surface; the bare `/api/v3` path bills pay-as-you-go.
+  if (/\/api\/plan\b/i.test(base)) return 'arkplan';
+  if (/ark\.(cn-)?[a-z0-9-]*\.volces\.com/i.test(base)) return 'ark';
   if (/\/(apps\/anthropic|compatible-mode)\//i.test(base)) return 'openai';
   return 'auto';
 }
@@ -390,8 +428,15 @@ function ttsRequest(protocol, { provider, text, model, voice, format, extraBody 
       };
     }
     case 'ark':
-    case 'openspeech': {
+    case 'openspeech':
+    case 'arkplan': {
       // 火山语音: req_params{ text, speaker, audio_params{format,sample_rate} }
+      // Agent Plan reuses the openspeech wire format but demands an explicit
+      // x-api-resource-id; without it the server answers 403 code 45000030
+      // "extract request resource id: get resource id empty".
+      const resourceId = protocol === 'arkplan'
+        ? (provider.resourceId ? String(provider.resourceId) : 'seed-tts-2.0')
+        : (modelId ? (/tts/i.test(modelId) ? modelId.replace(/^doubao-/, '') : modelId) : '');
       return {
         body: {
           ...(modelId ? { model: modelId } : {}),
@@ -407,7 +452,7 @@ function ttsRequest(protocol, { provider, text, model, voice, format, extraBody 
         },
         auth: 'x-api-key',
         headers: {
-          ...(modelId ? { 'x-api-resource-id': /tts/i.test(modelId) ? modelId.replace(/^doubao-/, '') : modelId } : {}),
+          ...(resourceId ? { 'x-api-resource-id': resourceId } : {}),
         },
       };
     }
@@ -429,7 +474,18 @@ async function ttsResponse(protocol, result, { apiKey, timeoutMs, format }) {
   const fallbackExt = String(format ?? '').toLowerCase() || 'mp3';
   if (result.bytes) {
     if (!isAudioBytes(result.bytes)) {
-      throw new Error('返回的二进制不是音频（可能是错误页或 JSON），请检查 baseURL 与 path');
+      // Some gateways answer errors with a JSON body but a non-JSON content type.
+      const text = result.bytes.toString('utf8').trim();
+      if (text.startsWith('{')) {
+        let parsed;
+        try { parsed = JSON.parse(text); } catch { parsed = null; }
+        if (parsed) {
+          const code = parsed.code ?? parsed.error?.code;
+          const info = parsed.message ?? parsed.error?.message ?? text;
+          throw new Error(`语音接口返回错误（code ${code ?? '?'}）：${String(info).slice(0, 300)}`);
+        }
+      }
+      throw new Error(`返回的二进制不是音频（可能是错误页或 JSON）：${text.slice(0, 200)}`);
     }
     return { bytes: result.bytes, ext: audioExtensionFrom(result.contentType, fallbackExt) };
   }
@@ -461,6 +517,14 @@ function readError(error) {
   // The endpoint exists but the router rejects it (e.g. `/apps/anthropic` prepended
   // to a native service path). Say so instead of echoing the portal URL.
   if (/url error/i.test(message)) message = `接口路径不被该地址接受（url error），baseURL 应填服务根地址：${message}`;
+  // Ark Agent Plan: the plan is active but its deduction switch is off for this seat.
+  if (/AgentPlanDeductNotEnabled/i.test(message)) {
+    message = 'Agent Plan 抵扣开关未开启：请到火山方舟控制台「Agent Plan」页面打开抵扣（deduction）设置，'
+      + '否则套餐内模型一律拒绝调用。原始信息：' + message;
+  }
+  if (/get resource id empty/i.test(message)) {
+    message = '缺少 x-api-resource-id 请求头（Agent Plan 语音必须带，如 seed-tts-2.0）。原始信息：' + message;
+  }
   return message.replace(/\s+/g, ' ').slice(0, 300);
 }
 
@@ -548,7 +612,9 @@ function imageRequest(protocol, { provider, prompt, size, model, extraBody }) {
         auth: 'bearer',
       };
     case 'ark':
+    case 'arkplan':
       // 方舟: OpenAI-like body, response is {data:[{url}]} (valid 24h).
+      // Agent Plan uses the identical shape, only the endpoint carries `/plan`.
       return {
         body: {
           ...(modelId ? { model: modelId } : {}),

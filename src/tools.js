@@ -7,7 +7,7 @@
  * reachable — including through the `remotion_cli` passthrough tool.
  */
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, join, resolve as pathResolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve as pathResolve } from 'node:path';
 import { CLI_SUBCOMMANDS, doctor, listProjects, projectPath, runNpm, runRemotionCli } from './runner.js';
 import { startStudio, stopAllStudios } from './studio.js';
 import { assetPath, generateImage, synthesizeSpeech } from './providers.js';
@@ -502,11 +502,14 @@ export function registerTools(ctx, { store, logger }) {
             format,
             model: args.model,
           });
+          // The saved file may not carry the requested extension (provider format wins).
+          const savedPath = result.path ?? outFile;
+          const savedName = basename(savedPath);
           return {
             ok: true,
-            summary: `配音已生成：${outFile}（${Math.round(result.bytes / 1024)} KB）`,
-            path: result.path,
-            publicPath: `staticFile('tts/${name}.${format}')`,
+            summary: `配音已生成：${savedPath}（${Math.round(result.bytes / 1024)} KB）`,
+            path: savedPath,
+            publicPath: `staticFile('tts/${savedName}')`,
             bytes: result.bytes,
           };
         },
@@ -553,11 +556,14 @@ export function registerTools(ctx, { store, logger }) {
             size: args.size,
             model: args.model,
           });
+          // The provider may return JPEG under a .png request; report the real file.
+          const savedPath = result.path ?? outFile;
+          const savedName = basename(savedPath);
           return {
             ok: true,
-            summary: `图片已生成：${outFile}（${Math.round(result.bytes / 1024)} KB）`,
-            path: result.path,
-            publicPath: `staticFile('images/${name}.${format}')`,
+            summary: `图片已生成：${savedPath}（${Math.round(result.bytes / 1024)} KB）`,
+            path: savedPath,
+            publicPath: `staticFile('images/${savedName}')`,
             bytes: result.bytes,
           };
         },

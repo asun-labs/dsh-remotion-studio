@@ -94,7 +94,10 @@ async function testProvider(provider, { store, logger }) {
       apiKey,
       prompt: 'a simple red circle on a white background, flat icon',
       outFile,
-      size: '512x512',
+      // No size override: the provider's own size is the only one guaranteed to be
+      // accepted (Ark Agent Plan rejects anything under 921600 px, gpt-image-1 has
+      // its own list). The probe tests credentials, not the user's size setting.
+      size: undefined,
     });
     let preview;
     try {
