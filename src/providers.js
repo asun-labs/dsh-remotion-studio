@@ -227,6 +227,25 @@ function parseExtraBody(extraBody, label) {
 
 /* ── HTTP ─────────────────────────────────────────────────────────────────── */
 
+/**
+ * Fold a chunked response into one object: audio chunks concatenated into `data`,
+ * and the last non-null code/message kept (the terminal chunk carries the real code).
+ */
+function parseNdjson(raw) {
+  const merged = { data: '' };
+  for (const line of String(raw).split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('{')) continue;
+    let chunk;
+    try { chunk = JSON.parse(trimmed); } catch { continue; }
+    if (typeof chunk.data === 'string') merged.data += chunk.data;
+    if (chunk.code !== undefined) merged.code = chunk.code;
+    if (chunk.message !== undefined) merged.message = chunk.message;
+    if (chunk.header && typeof chunk.header === 'object') merged.header = chunk.header;
+  }
+  return merged;
+}
+
 async function postJson(url, body, apiKey, { timeoutMs = 180000, headers = {}, auth = 'bearer' } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -252,8 +271,21 @@ async function postJson(url, body, apiKey, { timeoutMs = 180000, headers = {}, a
       throw new Error(`HTTP ${response.status} ${response.statusText} @ ${url}${detail ? `\n${detail}` : ''}`);
     }
     const contentType = response.headers.get('content-type') ?? '';
-    if (contentType.includes('application/json')) return { json: await response.json() };
-    return { bytes: Buffer.from(await response.arrayBuffer()), contentType };
+    const bytes = Buffer.from(await response.arrayBuffer());
+    // Take the body as bytes first and sniff the shape: 火山语音 openspeech answers
+    // with `application/json` yet the payload is a base64 wrapper, and some gateways
+    // answer `text/plain` with JSON inside. Sniffing keeps both paths on one branch.
+    const head = bytes.subarray(0, 64).toString('utf8').trimStart();
+    if (head.startsWith('{') || head.startsWith('[') || contentType.includes('application/json')) {
+      const raw = bytes.toString('utf8');
+      let json = null;
+      try { json = JSON.parse(raw); } catch { json = null; }
+      // 火山语音 (openspeech / Agent Plan) streams newline-delimited JSON chunks:
+      // {"code":0,"data":"<base64>"} per line, terminated by {"code":20000000,"data":null}.
+      if (!json && /\n/.test(raw.trim())) json = parseNdjson(raw);
+      if (json && typeof json === 'object') return { json };
+    }
+    return { bytes, contentType };
   } finally {
     clearTimeout(timer);
   }
@@ -472,7 +504,10 @@ function ttsRequest(protocol, { provider, text, model, voice, format, extraBody 
 
 async function ttsResponse(protocol, result, { apiKey, timeoutMs, format }) {
   const fallbackExt = String(format ?? '').toLowerCase() || 'mp3';
-  if (result.bytes) {
+  const json = result.json ?? {};
+  // Check the decoded JSON wrapper first: a binary-looking `bytes` also rides along
+  // whenever postJson parsed a JSON body, and that snapshot would shadow the audio.
+  if (!result.json && result.bytes) {
     if (!isAudioBytes(result.bytes)) {
       // Some gateways answer errors with a JSON body but a non-JSON content type.
       const text = result.bytes.toString('utf8').trim();
@@ -480,8 +515,8 @@ async function ttsResponse(protocol, result, { apiKey, timeoutMs, format }) {
         let parsed;
         try { parsed = JSON.parse(text); } catch { parsed = null; }
         if (parsed) {
-          const code = parsed.code ?? parsed.error?.code;
-          const info = parsed.message ?? parsed.error?.message ?? text;
+          const code = parsed.code ?? parsed.header?.code ?? parsed.error?.code;
+          const info = parsed.message ?? parsed.header?.message ?? parsed.error?.message ?? text;
           throw new Error(`语音接口返回错误（code ${code ?? '?'}）：${String(info).slice(0, 300)}`);
         }
       }
@@ -489,12 +524,16 @@ async function ttsResponse(protocol, result, { apiKey, timeoutMs, format }) {
     }
     return { bytes: result.bytes, ext: audioExtensionFrom(result.contentType, fallbackExt) };
   }
-  const json = result.json ?? {};
   const direct = json.data;
-  // 火山语音 openspeech: {"data": "<base64 chunk>", "code": 0}
-  if (protocol === 'openspeech' && typeof direct === 'string') {
+  // 火山语音 openspeech: {"data": "<base64 chunk>", "code": 0} — served with an
+  // `application/json` content type, so the raw bytes would fail the audio sniff.
+  // Ark Agent Plan speech rides the same openspeech endpoint and payload shape.
+  if ((protocol === 'openspeech' || protocol === 'arkplan') && typeof direct === 'string') {
     const base64 = toBase64(direct);
-    if (base64 && base64.length > 64) return { bytes: Buffer.from(base64, 'base64'), ext: 'mp3' };
+    if (base64 && base64.length > 64) return { bytes: Buffer.from(base64, 'base64'), ext: fallbackExt };
+  }
+  if (Number(json.code) && json.code !== 0 && !direct) {
+    throw new Error(`语音接口返回错误（code ${json.code}）：${String(json.message ?? json.msg ?? '').slice(0, 300)}`);
   }
   const explicit = [json.audio, json.audio_base64, json.audioContent, json.data?.audio];
   for (const candidate of explicit) {
