@@ -105,8 +105,34 @@ export async function synthesizeSpeech({ provider, apiKey, text, outFile, voice,
   return { path: outFile, bytes: bytes.length, model: String(model ?? provider.model ?? '') };
 }
 
+/** Pick a usable image URL out of a non-OpenAI (DashScope / 方舟) response shape. */
+function findImageUrl(node, depth = 0) {
+  if (!node || depth > 6) return undefined;
+  if (typeof node === 'string') {
+    return /^https?:\/\//i.test(node) && /\.(png|jpe?g|webp|gif|bmp)(\?|$)/i.test(node) ? node : undefined;
+  }
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const found = findImageUrl(item, depth + 1);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  if (typeof node === 'object') {
+    if (typeof node.b64_json === 'string') return undefined;
+    for (const value of Object.values(node)) {
+      const found = findImageUrl(value, depth + 1);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
 /**
- * Image generation. Accepts `b64_json` or `url` shaped responses.
+ * Image generation.
+ * Accepts OpenAI-style bodies (`prompt`, `size`, `n`) plus provider extras, and
+ * parses both OpenAI responses (`data[0].b64_json` / `.url`) and the
+ * DashScope / 方舟 shapes (`output.choices[0].message.content[0].image`).
  * @returns {Promise<{path:string, bytes:number, model:string, revisedPrompt?:string}>}
  */
 export async function generateImage({ provider, apiKey, prompt, outFile, size, model, timeoutMs }) {
@@ -124,10 +150,14 @@ export async function generateImage({ provider, apiKey, prompt, outFile, size, m
   const item = result.json?.data?.[0] ?? result.json?.output?.[0] ?? result.json;
   let bytes = result.bytes;
   if (!bytes) {
+    const remote =
+      (item && typeof item.url === 'string' ? item.url : undefined) ??
+      (item && typeof item.image === 'string' ? item.image : undefined) ??
+      findImageUrl(result.json);
     if (item && typeof item.b64_json === 'string') {
       bytes = Buffer.from(item.b64_json, 'base64');
-    } else if (item && typeof item.url === 'string') {
-      bytes = await fetchBytes(item.url, apiKey, timeoutMs);
+    } else if (remote) {
+      bytes = await fetchBytes(remote, apiKey, timeoutMs);
     } else if (typeof result.json?.data === 'string') {
       bytes = Buffer.from(result.json.data, 'base64');
     } else {
