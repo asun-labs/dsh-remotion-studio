@@ -1,0 +1,18 @@
+{
+  "name": "remotion-studio-readme-showcase",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.tsx --port=3127",
+    "render": "node render.mjs"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.546",
+    "@remotion/renderer": "4.0.546",
+    "@remotion/bundler": "4.0.546",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "remotion": "4.0.546"
+  }
+}
