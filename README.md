@@ -1,3 +1,5 @@
+<p align="center"><strong>简体中文</strong> · <a href="README.en.md">English</a></p>
+
 <p align="center">
   <img src="docs/media/cover.png" width="100%" alt="Remotion 影棚：把想法，放进画面。动态排版、竖屏产品短片与数据叙事的原创样片。">
 </p>
