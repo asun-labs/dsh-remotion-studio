@@ -205,6 +205,7 @@ export type ProviderConfig = {
   path?: string;
   model?: string;
   voice?: string;
+  resourceId?: string;
   format?: string;
   size?: string;
   apiKey?: string;
@@ -296,16 +297,16 @@ const ARKPLAN_TTS_HOST = 'https://openspeech.bytedance.com';
  * only serves chat, so it has to be dropped before a native path is appended.
  */
 function nativeBase(baseURL: string): string {
-  return String(baseURL ?? '').replace(/\/compatible-mode(\/v\d+)?\/?$/i, '');
+  return String(baseURL ?? '').replace(/\\/compatible-mode(\\/v\\d+)?\\/?$/i, '');
 }
 
 function protocolOf(config: ProviderConfig): string {
   const raw = String(config.protocol ?? '').toLowerCase();
   if (raw && raw !== 'auto') return raw;
   const base = String(config.baseURL ?? '');
-  if (/token-plan\./i.test(base)) return 'tokenplan';
-  if (/\/api\/plan\b/i.test(base)) return 'arkplan';
-  if (/ark\.(cn-)?[a-z0-9-]*\.volces\.com/i.test(base)) return 'ark';
+  if (/token-plan\\./i.test(base)) return 'tokenplan';
+  if (/\\/api\\/plan\\b/i.test(base)) return 'arkplan';
+  if (/ark\\.(cn-)?[a-z0-9-]*\\.volces\\.com/i.test(base)) return 'ark';
   return 'openai';
 }
 
